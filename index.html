@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Master Item List</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header><h1>Master Item List Upload</h1></header>
+  <main>
+    <section class="input-group">
+      <label for="csv">Upload new item_list.csv</label>
+      <div class="flex">
+        <input type="file" id="csv" accept=".csv" />
+        <button id="uploadBtn">Upload</button>
+      </div>
+    </section>
+
+    <section id="info" class="input-group">
+      <strong>Last upload:</strong> <span id="uploadedAt">–</span><br />
+      <strong>Total items:</strong> <span id="count">–</span>
+    </section>
+
+    <table id="itemsTable">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </main>
+  <script>
+  async function fetchMetadata() {
+    const res = await fetch('/api/metadata');
+    if (res.ok) {
+      const { uploadedAt, count } = await res.json();
+      document.getElementById('uploadedAt').textContent = uploadedAt ? new Date(uploadedAt).toLocaleString() : 'Never';
+      document.getElementById('count').textContent = count;
+    }
+  }
+  async function fetchItems() {
+    const res = await fetch('/api/items');
+    if (!res.ok) return;
+    const rows = await res.json();
+    const thead = document.querySelector('#itemsTable thead');
+    const tbody = document.querySelector('#itemsTable tbody');
+    thead.innerHTML = '';
+    tbody.innerHTML = '';
+    if (!rows.length) return;
+    // Build header
+    const headerRow = document.createElement('tr');
+    Object.keys(rows[0]).forEach(k => {
+      const th = document.createElement('th');
+      th.textContent = k;
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    // Build body
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      Object.values(r).forEach((v, i) => {
+        const td = document.createElement('td');
+        td.textContent = v;
+        td.setAttribute('data-label', Object.keys(r)[i]);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+  document.getElementById('uploadBtn').addEventListener('click', async () => {
+    const fileInput = document.getElementById('csv');
+    if (!fileInput.files.length) return alert('Select a CSV file first');
+    const fd = new FormData();
+    fd.append('csv', fileInput.files[0]);
+    const res = await fetch('/upload', { method: 'POST', body: fd });
+    if (res.ok) {
+      await fetchMetadata();
+      await fetchItems();
+      fileInput.value = '';
+    } else {
+      alert('Upload failed');
+    }
+  });
+  fetchMetadata();
+  fetchItems();
+  </script>
+</body>
+</html>
