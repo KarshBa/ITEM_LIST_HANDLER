@@ -104,10 +104,6 @@ app.get('/api/items', async (req, res) => {
   }
 });
 
-  stream.on('close', () => res.json(rows));
-  stream.on('error', err => res.status(500).json({ error: err.message }));
-});
-
 app.get('/item_list.csv', (req, res) => {
   if (!fs.existsSync(CSV_PATH)) return res.status(404).send('File not found');
   res.sendFile(CSV_PATH);
