@@ -7,51 +7,52 @@ import csv from 'csv-parser';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname  = path.dirname(__filename);
 
-const app = express();
+const app  = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const CSV_PATH = path.join(DATA_DIR, 'item_list.csv');
+/* ---------- paths ---------- */
+const DATA_DIR  = process.env.DATA_DIR || path.join(__dirname, 'data');
+const CSV_PATH  = path.join(DATA_DIR, 'item_list.csv');
 const META_PATH = path.join(DATA_DIR, 'metadata.json');
-
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
+/* ---------- multer config ---------- */
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, process.env.DATA_DIR || '/var/data'),
-  filename: (req, file, cb)   => cb(null, 'item_list.csv')   // always same name
+  destination: (req, file, cb) => cb(null, DATA_DIR),               // <- disk mount
+  filename:    (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
 });
 const upload = multer({
   storage,
-  fileFilter: (_, file, cb) => {
-    file.originalname.endsWith('.csv') ? cb(null, true)
-                                       : cb(new Error('Only CSV files are allowed'));
-  }
+  fileFilter: (_req, file, cb) =>
+    file.originalname.endsWith('.csv')
+      ? cb(null, true)
+      : cb(new Error('Only CSV files are allowed'))
 });
 
-function getMetadata() {
+/* ---------- helpers ---------- */
+function readMeta() {
   if (fs.existsSync(META_PATH)) {
     try { return JSON.parse(fs.readFileSync(META_PATH, 'utf8')); }
-    catch { return { uploadedAt: null, count: 0 }; }
+    catch { /* fall through */ }
   }
   return { uploadedAt: null, count: 0 };
 }
 
-app.get('/api/metadata', (req, res) => {
-  res.json(getMetadata());
-});
+/* ---------- routes ---------- */
+app.get('/api/metadata', (req, res) => res.json(readMeta()));
 
 app.get('/api/items', (req, res) => {
   if (!fs.existsSync(CSV_PATH)) return res.json([]);
-  const results = [];
+  const rows = [];
   fs.createReadStream(CSV_PATH)
     .pipe(csv())
-    .on('data', data => results.push(data))
-    .on('end', () => res.json(results));
+    .on('data', row => rows.push(row))
+    .on('end', () => res.json(rows));
 });
 
 app.get('/item_list.csv', (req, res) => {
@@ -61,21 +62,24 @@ app.get('/item_list.csv', (req, res) => {
 
 app.post('/upload', upload.single('csv'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const tmpPath = req.file.path;
-  let count = 0;
+
+  const tmpPath   = req.file.path;        // e.g. /var/data/1729971000-item_list.csv
+  let   rowCount  = 0;
+
   fs.createReadStream(tmpPath)
     .pipe(csv())
-    .on('data', () => count++)
+    .on('data', () => rowCount++)
     .on('end', () => {
-      fs.renameSync(tmpPath, CSV_PATH);
-      const meta = { uploadedAt: new Date().toISOString(), count };
+      fs.renameSync(tmpPath, CSV_PATH);   // atomic: same filesystem
+      const meta = { uploadedAt: new Date().toISOString(), count: rowCount };
       fs.writeFileSync(META_PATH, JSON.stringify(meta));
       res.json(meta);
     })
-    .on('error', (err) => {
-      fs.unlinkSync(tmpPath);
+    .on('error', err => {
+      fs.unlinkSync(tmpPath);             // clean up bad upload
       res.status(500).json({ error: err.message });
     });
 });
 
+/* ---------- start ---------- */
 app.listen(PORT, () => console.log(`Master Item List server running on ${PORT}`));
