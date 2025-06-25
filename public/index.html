@@ -21,82 +21,88 @@
       <strong>Last upload:</strong> <span id="uploadedAt">–</span><br />
       <strong>Total items:</strong> <span id="count">–</span>
     </section>
-
+<div class="flex">
+  <button id="prevBtn" class="secondary" disabled>Prev</button>
+  <button id="nextBtn" class="secondary">Next</button>
+</div>
     <table id="itemsTable">
       <thead></thead>
       <tbody></tbody>
     </table>
   </main>
 <script>
+/* ---------- pagination state ---------- */
+let page = 1;
+const pageSize = 200;   // adjust to taste
+
 /* ---------- helpers ---------- */
-function renderMetadata({ uploadedAt, count }) {
+function renderMetadata({ uploadedAt, total }) {
   document.getElementById('uploadedAt').textContent =
     uploadedAt ? new Date(uploadedAt).toLocaleString() : 'Never';
-  document.getElementById('count').textContent = count ?? 0;
+  document.getElementById('count').textContent = total ?? 0;
 }
 
-async function fetchMetadata() {
-  const res = await fetch('/api/metadata');
-  if (res.ok) renderMetadata(await res.json());
-}
-
-async function fetchItems() {
-  const res = await fetch('/api/items');
+/* ---------- load one page ---------- */
+async function loadPage(p = 1) {
+  const res = await fetch(`/api/items?page=${p}&pageSize=${pageSize}`);
   if (!res.ok) return;
-  const rows = await res.json();
+
+  const { rows, total } = await res.json();
+  renderMetadata({ total, uploadedAt: null });      // update item count
 
   const thead = document.querySelector('#itemsTable thead');
   const tbody = document.querySelector('#itemsTable tbody');
-  thead.innerHTML = '';
-  tbody.innerHTML = '';
+  thead.innerHTML = tbody.innerHTML = '';
 
   if (!rows.length) return;
 
-  /* build header */
-  const headerRow = document.createElement('tr');
-  Object.keys(rows[0]).forEach(k => {
-    const th = document.createElement('th');
-    th.textContent = k;
-    headerRow.appendChild(th);
-  });
-  thead.appendChild(headerRow);
+  /* header */
+  const keys = Object.keys(rows[0]);
+  thead.innerHTML =
+    '<tr>' + keys.map(k => `<th>${k}</th>`).join('') + '</tr>';
 
-  /* build body */
+  /* body */
   rows.forEach(r => {
     const tr = document.createElement('tr');
-    Object.entries(r).forEach(([key, val]) => {
-      const td = document.createElement('td');
-      td.textContent = val;
-      td.setAttribute('data-label', key);
-      tr.appendChild(td);
-    });
+    keys.forEach(k =>
+      tr.insertAdjacentHTML(
+        'beforeend',
+        `<td data-label="${k}">${r[k]}</td>`
+      )
+    );
     tbody.appendChild(tr);
   });
+
+  /* nav button state */
+  document.getElementById('prevBtn').disabled = p === 1;
+  document.getElementById('nextBtn').disabled = p * pageSize >= total;
+  page = p;
 }
+
+/* ---------- button handlers ---------- */
+document.getElementById('prevBtn').onclick = () => loadPage(page - 1);
+document.getElementById('nextBtn').onclick = () => loadPage(page + 1);
 
 /* ---------- upload handler ---------- */
 document.getElementById('uploadBtn').addEventListener('click', async () => {
   const fileInput = document.getElementById('csv');
-  if (!fileInput.files.length) return alert('Select a CSV file first');
+  if (!fileInput.files.length) return alert('Select a file first');
 
   const fd = new FormData();
   fd.append('csv', fileInput.files[0]);
 
   const res = await fetch('/upload', { method: 'POST', body: fd });
-
   if (res.ok) {
-    const meta = await res.json();   // response already has { uploadedAt, count }
-    renderMetadata(meta);            // update spans instantly
-    await fetchItems();              // refresh the table
-    fileInput.value = '';            // reset file picker
+    await loadPage(1);                  // reload first page after upload
+    fileInput.value = '';
   } else {
     alert('Upload failed');
   }
 });
 
 /* ---------- initial load ---------- */
-fetchMetadata();
-fetchItems();
+fetch('/api/metadata').then(r => r.ok && r.json().then(renderMetadata));
+loadPage(1);
 </script>
 </body>
 </html>
