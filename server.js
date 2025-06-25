@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const CSV_PATH = path.join(DATA_DIR, 'item_list.csv');
 const META_PATH = path.join(DATA_DIR, 'metadata.json');
 
