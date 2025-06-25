@@ -4,6 +4,7 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import csv from 'csv-parser';
+import XLSX from 'xlsx';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,7 +30,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   fileFilter: (_req, file, cb) =>
-    file.originalname.endsWith('.csv')
+    file.originalname.match(/\.(csv|xlsb)$/i)
       ? cb(null, true)
       : cb(new Error('Only CSV files are allowed'))
 });
@@ -63,22 +64,48 @@ app.get('/item_list.csv', (req, res) => {
 app.post('/upload', upload.single('csv'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-  const tmpPath   = req.file.path;        // e.g. /var/data/1729971000-item_list.csv
-  let   rowCount  = 0;
+  const tmpPath  = req.file.path;        // lives in DATA_DIR already
+  const finalCSV = CSV_PATH;             // /var/data/item_list.csv
+  const meta     = { uploadedAt: new Date().toISOString(), count: 0 };
 
-  fs.createReadStream(tmpPath)
-    .pipe(csv())
-    .on('data', () => rowCount++)
-    .on('end', () => {
-      fs.renameSync(tmpPath, CSV_PATH);   // atomic: same filesystem
-      const meta = { uploadedAt: new Date().toISOString(), count: rowCount };
-      fs.writeFileSync(META_PATH, JSON.stringify(meta));
-      res.json(meta);
-    })
-    .on('error', err => {
-      fs.unlinkSync(tmpPath);             // clean up bad upload
-      res.status(500).json({ error: err.message });
-    });
+  const ext = path.extname(req.file.originalname).toLowerCase();
+
+  /* ---- 1. If user gave a CSV, just rename ---- */
+  if (ext === '.csv') {
+    fs.renameSync(tmpPath, finalCSV);    // atomic (same disk)
+    /* count rows */
+    fs.createReadStream(finalCSV)
+      .pipe(csv())
+      .on('data', () => meta.count++)
+      .on('end', () => {
+        fs.writeFileSync(META_PATH, JSON.stringify(meta));
+        res.json(meta);
+      })
+      .on('error', err => {
+        fs.unlinkSync(finalCSV);
+        res.status(500).json({ error: err.message });
+      });
+    return;
+  }
+
+  /* ---- 2. If user gave an XLSB ---- */
+  try {
+    const wb   = XLSX.readFile(tmpPath, { type: 'binary' });
+    const ws   = wb.Sheets['DataSheet'];
+    if (!ws)   throw new Error('Sheet "DataSheet" not found');
+    /* convert worksheet → CSV text */
+    const csvText = XLSX.utils.sheet_to_csv(ws, { FS: ',', blankrows: false });
+    fs.writeFileSync(finalCSV, csvText);
+    fs.unlinkSync(tmpPath);             // discard temp .xlsb
+
+    /* count rows (skip header line if present) */
+    meta.count = csvText.trim().split('\n').length - 1;
+    fs.writeFileSync(META_PATH, JSON.stringify(meta));
+    res.json(meta);
+  } catch (err) {
+    fs.unlinkSync(tmpPath);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /* ---------- start ---------- */
