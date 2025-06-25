@@ -49,11 +49,31 @@ app.get('/api/metadata', (req, res) => res.json(readMeta()));
 
 app.get('/api/items', (req, res) => {
   if (!fs.existsSync(CSV_PATH)) return res.json([]);
+
+  const limit   = parseInt(req.query.limit, 10) || Infinity;      // e.g. ?limit=200
+  const columns = (req.query.columns || '')                       // e.g. ?columns=code,brand
+                   .split(',')
+                   .map(s => s.trim())
+                   .filter(Boolean);
+
   const rows = [];
-  fs.createReadStream(CSV_PATH)
-    .pipe(csv())
-    .on('data', row => rows.push(row))
-    .on('end', () => res.json(rows));
+  const stream = fs.createReadStream(CSV_PATH).pipe(csv());
+
+  stream.on('data', row => {
+    // slice to requested columns, if any
+    if (columns.length) {
+      row = Object.fromEntries(
+        Object.entries(row).filter(([key]) => columns.includes(key))
+      );
+    }
+    rows.push(row);
+
+    // stop reading if we've reached the limit
+    if (rows.length >= limit) stream.destroy();
+  });
+
+  stream.on('close', () => res.json(rows));
+  stream.on('error', err => res.status(500).json({ error: err.message }));
 });
 
 app.get('/item_list.csv', (req, res) => {
