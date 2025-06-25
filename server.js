@@ -21,11 +21,15 @@ const META_PATH = path.join(DATA_DIR, 'metadata.json');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, process.env.DATA_DIR || '/var/data'),
+  filename: (req, file, cb)   => cb(null, 'item_list.csv')   // always same name
+});
 const upload = multer({
-  dest: 'tmp/',
+  storage,
   fileFilter: (_, file, cb) => {
-    if (file.originalname.endsWith('.csv')) cb(null, true);
-    else cb(new Error('Only CSV files are allowed'));
+    file.originalname.endsWith('.csv') ? cb(null, true)
+                                       : cb(new Error('Only CSV files are allowed'));
   }
 });
 
