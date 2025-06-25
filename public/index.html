@@ -27,60 +27,76 @@
       <tbody></tbody>
     </table>
   </main>
-  <script>
-  async function fetchMetadata() {
-    const res = await fetch('/api/metadata');
-    if (res.ok) {
-      const { uploadedAt, count } = await res.json();
-      document.getElementById('uploadedAt').textContent = uploadedAt ? new Date(uploadedAt).toLocaleString() : 'Never';
-      document.getElementById('count').textContent = count;
-    }
-  }
-  async function fetchItems() {
-    const res = await fetch('/api/items');
-    if (!res.ok) return;
-    const rows = await res.json();
-    const thead = document.querySelector('#itemsTable thead');
-    const tbody = document.querySelector('#itemsTable tbody');
-    thead.innerHTML = '';
-    tbody.innerHTML = '';
-    if (!rows.length) return;
-    // Build header
-    const headerRow = document.createElement('tr');
-    Object.keys(rows[0]).forEach(k => {
-      const th = document.createElement('th');
-      th.textContent = k;
-      headerRow.appendChild(th);
-    });
-    thead.appendChild(headerRow);
-    // Build body
-    rows.forEach(r => {
-      const tr = document.createElement('tr');
-      Object.values(r).forEach((v, i) => {
-        const td = document.createElement('td');
-        td.textContent = v;
-        td.setAttribute('data-label', Object.keys(r)[i]);
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    });
-  }
-  document.getElementById('uploadBtn').addEventListener('click', async () => {
-    const fileInput = document.getElementById('csv');
-    if (!fileInput.files.length) return alert('Select a CSV file first');
-    const fd = new FormData();
-    fd.append('csv', fileInput.files[0]);
-    const res = await fetch('/upload', { method: 'POST', body: fd });
-    if (res.ok) {
-      await fetchMetadata();
-      await fetchItems();
-      fileInput.value = '';
-    } else {
-      alert('Upload failed');
-    }
+<script>
+/* ---------- helpers ---------- */
+function renderMetadata({ uploadedAt, count }) {
+  document.getElementById('uploadedAt').textContent =
+    uploadedAt ? new Date(uploadedAt).toLocaleString() : 'Never';
+  document.getElementById('count').textContent = count ?? 0;
+}
+
+async function fetchMetadata() {
+  const res = await fetch('/api/metadata');
+  if (res.ok) renderMetadata(await res.json());
+}
+
+async function fetchItems() {
+  const res = await fetch('/api/items');
+  if (!res.ok) return;
+  const rows = await res.json();
+
+  const thead = document.querySelector('#itemsTable thead');
+  const tbody = document.querySelector('#itemsTable tbody');
+  thead.innerHTML = '';
+  tbody.innerHTML = '';
+
+  if (!rows.length) return;
+
+  /* build header */
+  const headerRow = document.createElement('tr');
+  Object.keys(rows[0]).forEach(k => {
+    const th = document.createElement('th');
+    th.textContent = k;
+    headerRow.appendChild(th);
   });
-  fetchMetadata();
-  fetchItems();
-  </script>
+  thead.appendChild(headerRow);
+
+  /* build body */
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    Object.entries(r).forEach(([key, val]) => {
+      const td = document.createElement('td');
+      td.textContent = val;
+      td.setAttribute('data-label', key);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+/* ---------- upload handler ---------- */
+document.getElementById('uploadBtn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('csv');
+  if (!fileInput.files.length) return alert('Select a CSV file first');
+
+  const fd = new FormData();
+  fd.append('csv', fileInput.files[0]);
+
+  const res = await fetch('/upload', { method: 'POST', body: fd });
+
+  if (res.ok) {
+    const meta = await res.json();   // response already has { uploadedAt, count }
+    renderMetadata(meta);            // update spans instantly
+    await fetchItems();              // refresh the table
+    fileInput.value = '';            // reset file picker
+  } else {
+    alert('Upload failed');
+  }
+});
+
+/* ---------- initial load ---------- */
+fetchMetadata();
+fetchItems();
+</script>
 </body>
 </html>
