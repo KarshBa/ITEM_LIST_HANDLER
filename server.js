@@ -44,33 +44,65 @@ function readMeta() {
   return { uploadedAt: null, count: 0 };
 }
 
+/* cache: { rows: [...], stamp: '2025-06-26T00:14:…Z' }  */
+let itemsCache = null;
+
+async function getAllRows() {
+  const meta = readMeta();
+  /* reload if cache empty or CSV updated after last cache */
+  if (!itemsCache || itemsCache.stamp !== meta.uploadedAt) {
+    const rows = [];
+    await new Promise((resolve, reject) => {
+      fs.createReadStream(CSV_PATH)
+        .pipe(csv())
+        .on('data', r => rows.push(r))
+        .on('end', resolve)
+        .on('error', reject);
+    });
+    itemsCache = { rows, stamp: meta.uploadedAt };
+  }
+  return itemsCache.rows;
+}
+
 /* ---------- routes ---------- */
 app.get('/api/metadata', (req, res) => res.json(readMeta()));
 
-app.get('/api/items', (req, res) => {
-  if (!fs.existsSync(CSV_PATH)) return res.json([]);
+/* ------------------------------------------------------------------ */
+/* PAGINATED /api/items                                               */
+/* ------------------------------------------------------------------ */
+app.get('/api/items', async (req, res) => {
+  if (!fs.existsSync(CSV_PATH))
+    return res.json({ total: 0, page: 1, pageSize: 0, rows: [] });
 
-  const limit   = parseInt(req.query.limit, 10) || Infinity;      // e.g. ?limit=200
-  const columns = (req.query.columns || '')                       // e.g. ?columns=code,brand
-                   .split(',')
-                   .map(s => s.trim())
-                   .filter(Boolean);
+  /* ---------- query params ---------- */
+  const page     = Math.max(1,  parseInt(req.query.page     || 1,   10));
+  const pageSize = Math.max(1,  parseInt(req.query.pageSize || 200, 10));
+  const columns  = (req.query.columns || '')                  // optional: keep your column filter
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean);
 
-  const rows = [];
-  const stream = fs.createReadStream(CSV_PATH).pipe(csv());
+  try {
+    /* one-time CSV parse, then cached in memory */
+    const allRows = await getAllRows();        // uses itemsCache helper already in your file
+    const total   = allRows.length;
+    const start   = (page - 1) * pageSize;
 
-  stream.on('data', row => {
-    // slice to requested columns, if any
+    /* slice the page we need */
+    let rows = allRows.slice(start, start + pageSize);
+
+    /* column filtering if ?columns= supplied */
     if (columns.length) {
-      row = Object.fromEntries(
-        Object.entries(row).filter(([key]) => columns.includes(key))
+      rows = rows.map(r =>
+        Object.fromEntries(Object.entries(r).filter(([k]) => columns.includes(k)))
       );
     }
-    rows.push(row);
 
-    // stop reading if we've reached the limit
-    if (rows.length >= limit) stream.destroy();
-  });
+    res.json({ total, page, pageSize, rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
   stream.on('close', () => res.json(rows));
   stream.on('error', err => res.status(500).json({ error: err.message }));
