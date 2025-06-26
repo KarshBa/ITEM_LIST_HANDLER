@@ -112,6 +112,25 @@ document.getElementById('uploadBtn').addEventListener('click', async () => {
   }
 });
 
+document.getElementById('refreshBtn').onclick = async () => {
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  btn.textContent = 'Refreshing…';
+
+  const res = await fetch('/api/sync-items', { method: 'POST' });
+  const { success } = await res.json();
+
+  if (success) {
+    alert('Item list updated!');
+    await loadPage(page);         // reload current page with fresh data
+  } else {
+    alert('Refresh failed – master server may be down.');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Refresh Items';
+};
+  
 /* ---------- initial load ---------- */
 fetch('/api/metadata').then(r => r.ok && r.json().then(renderMetadata));
 loadPage(1);
