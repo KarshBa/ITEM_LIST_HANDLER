@@ -36,3 +36,7 @@ th{background:#f1f3f4;}
   td{border:none;position:relative;padding-left:50%;}
   td::before{content:attr(data-label);position:absolute;left:0;top:0;width:48%;padding:.6rem;font-weight:600;text-transform:capitalize;}
 }
+.page-info{
+  margin:0.25rem 0 0.5rem;   /* small gap above the table */
+  font-weight:600;
+}
