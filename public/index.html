@@ -24,6 +24,7 @@
 <div class="flex">
   <button id="prevBtn" class="secondary" disabled>Prev</button>
   <button id="nextBtn" class="secondary">Next</button>
+  <span id="pageInfo" style="margin-left:auto;font-weight:600;"></span>
 </div>
     <table id="itemsTable">
       <thead></thead>
@@ -36,11 +37,15 @@ let page = 1;
 const pageSize = 200;   // adjust to taste
 
 /* ---------- helpers ---------- */
-function renderMetadata({ uploadedAt, total }) {
-  document.getElementById('uploadedAt').textContent =
-    uploadedAt ? new Date(uploadedAt).toLocaleString() : 'Never';
-  document.getElementById('count').textContent = total ?? 0;
-}
+function renderMetadata({ uploadedAt, total, count }) {
+  // pick whichever row-count field is present
+  const rows = total ?? count ?? 0;
+  if (uploadedAt !== undefined) {
+    document.getElementById('uploadedAt').textContent =
+      uploadedAt ? new Date(uploadedAt).toLocaleString() : 'Never';
+  }
+  document.getElementById('count').textContent = rows;
+ }
 
 /* ---------- load one page ---------- */
 async function loadPage(p = 1) {
@@ -48,7 +53,7 @@ async function loadPage(p = 1) {
   if (!res.ok) return;
 
   const { rows, total } = await res.json();
-  renderMetadata({ total, uploadedAt: null });      // update item count
+  renderMetadata({ total });      // keep existing uploadedAt
 
   const thead = document.querySelector('#itemsTable thead');
   const tbody = document.querySelector('#itemsTable tbody');
@@ -76,6 +81,9 @@ async function loadPage(p = 1) {
   /* nav button state */
   document.getElementById('prevBtn').disabled = p === 1;
   document.getElementById('nextBtn').disabled = p * pageSize >= total;
+  /* page indicator */
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  document.getElementById('pageInfo').textContent = `Page ${p} / ${pages}`;
   page = p;
 }
 
@@ -93,7 +101,9 @@ document.getElementById('uploadBtn').addEventListener('click', async () => {
 
   const res = await fetch('/upload', { method: 'POST', body: fd });
   if (res.ok) {
-    await loadPage(1);                  // reload first page after upload
+  const meta = await res.json();      // { uploadedAt, count }
+  renderMetadata(meta);               // show new timestamp & total
+  await loadPage(1);                  // then refresh the first page
     fileInput.value = '';
   } else {
     alert('Upload failed');
