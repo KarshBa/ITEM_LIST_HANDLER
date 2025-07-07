@@ -139,6 +139,11 @@ app.get('/item_list.csv', (req, res) => {
 app.post('/upload', upload.single('csv'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
+  app.post('/api/sync-items', async (_req, res) => {
+  await pingDownstreams();
+  res.json({ success: true });
+});
+
   const tmpPath  = req.file.path;        // lives in DATA_DIR already
   const finalCSV = CSV_PATH;             // /var/data/item_list.csv
   const meta     = { uploadedAt: new Date().toISOString(), count: 0 };
@@ -148,12 +153,14 @@ app.post('/upload', upload.single('csv'), (req, res) => {
   /* ---- 1. If user gave a CSV, just rename ---- */
   if (ext === '.csv') {
     fs.renameSync(tmpPath, finalCSV);    // atomic (same disk)
-    /* count rows */
+    /* count rows, then notify */
     fs.createReadStream(finalCSV)
       .pipe(csv())
       .on('data', () => meta.count++)
       .on('end', () => {
         fs.writeFileSync(META_PATH, JSON.stringify(meta));
+        itemsCache = null;            // invalidate in-memory cache
+        pingDownstreams().catch(console.error);
         res.json(meta);
       })
       .on('error', err => {
@@ -176,7 +183,7 @@ app.post('/upload', upload.single('csv'), (req, res) => {
     /* count rows (skip header line if present) */
     meta.count = csvText.trim().split('\n').length - 1;
     fs.writeFileSync(META_PATH, JSON.stringify(meta));
-    /* 🔔 notify the fleet that a new master list is ready */
+    itemsCache = null;
     pingDownstreams().catch(console.error);
     res.json(meta);
   } catch (err) {
