@@ -136,13 +136,13 @@ app.get('/item_list.csv', (req, res) => {
   res.sendFile(CSV_PATH);
 });
 
-app.post('/upload', upload.single('csv'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
   app.post('/api/sync-items', async (_req, res) => {
   await pingDownstreams();
   res.json({ success: true });
 });
+
+app.post('/upload', upload.single('csv'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const tmpPath  = req.file.path;        // lives in DATA_DIR already
   const finalCSV = CSV_PATH;             // /var/data/item_list.csv
