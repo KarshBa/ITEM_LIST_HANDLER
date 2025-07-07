@@ -176,6 +176,8 @@ app.post('/upload', upload.single('csv'), (req, res) => {
     /* count rows (skip header line if present) */
     meta.count = csvText.trim().split('\n').length - 1;
     fs.writeFileSync(META_PATH, JSON.stringify(meta));
+    /* 🔔 notify the fleet that a new master list is ready */
+    pingDownstreams().catch(console.error);
     res.json(meta);
   } catch (err) {
     fs.unlinkSync(tmpPath);
