@@ -1,4 +1,5 @@
 import express from 'express';
+import fetch   from 'node-fetch';
 import multer from 'multer';
 import cors from 'cors';
 import fs from 'fs';
@@ -12,6 +13,32 @@ const __dirname  = path.dirname(__filename);
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
+
+/* ------------------------------------------------------------------
+ * Where should we broadcast a “please refresh” ping?
+ * Supply a comma-separated list in Render → Environment → Variables, e.g.
+ *
+ *   DOWNSTREAM_URLS=https://inventory-counts.onrender.com,
+ *                   https://inventory-shrink.onrender.com
+ * ------------------------------------------------------------------*/
+const DOWNSTREAM_URLS = (process.env.DOWNSTREAM_URLS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+async function pingDownstreams() {
+  for (const host of DOWNSTREAM_URLS) {
+    try {
+      const res = await fetch(`${host}/api/refresh-items`, {   // 🔸endpoint that the
+        method: 'POST',                                        //    other apps expose
+        timeout: 10_000
+      });
+      console.log(`[Notify] ${host} → ${res.ok ? 'OK' : res.status}`);
+    } catch (err) {
+      console.warn(`[Notify] ${host} failed:`, err.message);
+    }
+  }
+}
 
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
