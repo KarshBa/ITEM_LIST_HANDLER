@@ -2,7 +2,7 @@
 
 const box        = document.getElementById('searchBox');
 const btn        = document.getElementById('searchBtn');
-const sugg       = document.getElementById('suggestList');
+const sugg       = document.getElementById('suggestions');
 const tbl        = document.getElementById('resultTable');
 const info       = document.getElementById('resultInfo');
 const exportBtn  = document.getElementById('exportBtn');
