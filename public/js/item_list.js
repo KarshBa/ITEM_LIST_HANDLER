@@ -59,17 +59,19 @@ async function fetchSuggestions(q){
 }
 
 function showSuggestions(list){
-  if(!list.length){ sugg.style.display='none'; sugg.innerHTML=''; return; }
+  if(!list.length){ sugg.classList.add('hidden'); sugg.innerHTML=''; return; }
+  buildColMap(list[0]);
+
   sugg.innerHTML = list.map(r=>{
-    const code = pick(r, UPC_RX);
-    const brand= pick(r, BRAND_RX);
-    const desc = pick(r, DESC_RX);
+    const code  = r[colMap.code]  || '';
+    const brand = r[colMap.brand] || '';
+    const desc  = r[colMap.desc]  || '';
     return `<li data-code="${code}">
               <strong>${brand || '(no brand)'}</strong> – ${desc || '(no description)'}
               <span class="muted" style="float:right">${code}</span>
             </li>`;
   }).join('');
-  sugg.style.display='block';
+  sugg.classList.remove('hidden');
 }
 
 const handleInput = debounce(async e=>{
