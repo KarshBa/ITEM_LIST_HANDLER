@@ -28,14 +28,15 @@
 <header><h1>Item List Search</h1></header>
 <main>
   <div class="flex" style="gap:.5rem;align-items:flex-end;margin-bottom:.5rem;">
-  <input id="searchBox" type="text" placeholder="Search UPC / Brand / Description" style="flex:1;">
+  <div class="search-wrap">
+    <input id="searchBox" type="text" placeholder="Search UPC / Brand / Description" style="width:100%;">
+    <ul id="suggestions" class="suggest-list hidden"></ul>
+  </div>
+
   <select id="subdeptSelect" style="max-width:220px;"></select>
   <button id="searchBtn">Search</button>
   <button id="exportBtn" class="success">Export CSV</button>
 </div>
-
-<!-- suggestions dropdown -->
-<ul id="suggestions" class="suggest-list hidden"></ul>
 
 <!-- Bulk UPC exact -->
 <div class="flex" style="gap:.5rem;align-items:flex-end;margin:.4rem 0 1rem;">
