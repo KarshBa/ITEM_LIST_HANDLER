@@ -27,16 +27,23 @@
 <body>
 <header><h1>Item List Search</h1></header>
 <main>
-  <div class="input-group flex">
-    <div class="search-wrap">
-      <label for="searchBox">Search (UPC / Brand / Description)</label>
-      <input type="text" id="searchBox" placeholder="Type and hit Enter…" />
-      <ul id="suggestList"></ul>
-    </div>
-    <button id="searchBtn">Search</button>
-    <button id="exportBtn" class="success">Export CSV</button>
+  <div class="input-group flex" id="searchRow" style="align-items:flex-end;">
+  <div class="search-wrap" style="flex:1;position:relative;">
+    <label for="searchBox">Search (UPC / Brand / Description)</label>
+    <input type="text" id="searchBox" placeholder="Type and hit Enter…" />
+    <ul id="suggestList"></ul>
+  </div>
+  <!-- Sub-department filter -->
+  <div style="min-width:220px;">
+    <label for="subdeptSelect">Sub-department</label>
+    <select id="subdeptSelect">
+      <option value="">All</option>
+    </select>
   </div>
 
+  <button id="searchBtn">Search</button>
+  <button id="exportBtn" class="success">Export CSV</button>
+</div>
   <div class="page-info" id="resultInfo"></div>
 
   <table id="resultTable">
