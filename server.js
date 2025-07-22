@@ -91,6 +91,15 @@ async function getAllRows() {
   return itemsCache.rows;
 }
 
+// ---------- shared helpers ----------
+const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g,'');
+const canonUPC = raw => {
+  const d = String(raw || '').replace(/\D/g,'');
+  if (!d) return '';
+  if (d.length === 12) return ('0' + d.slice(0,11)).padStart(13,'0');
+  return d.padStart(13,'0');
+};
+
 // ---------- search helpers ----------
 const canonUPC = raw => {
   const d = String(raw || '').replace(/\D/g, '');
@@ -210,81 +219,93 @@ app.post('/upload', upload.single('csv'), (req, res) => {
   }
 });
 
-/* unique Sub-department list for the dropdown */
+/* unique Sub-department list (name + number) */
 app.get('/api/subdepartments', async (_req, res) => {
-  try {
+  try{
     const rows = await getAllRows();
     if (!rows.length) return res.json({ subdepartments: [] });
 
-    // detect the subdept column once
-    if (!app.locals.subKey) {
+    // detect columns once
+    if (!app.locals.sdCols) {
       const keys = Object.keys(rows[0]);
-      app.locals.subKey =
-        keys.find(k => norm(k) === 'subdepartmentdescription') ||
-        keys.find(k => norm(k).includes('subdept')) ||
-        null;
+      const byAlias = (aliases) => keys.find(k => aliases.includes(norm(k)));
+      app.locals.sdCols = {
+        name : byAlias(['subdepartmentdescription','subdepartmentdesc','subdeptdescription']),
+        num  : byAlias(['subdepartmentnumber','subdeptnumber','subdepartmentno'])
+      };
     }
 
-    const set = new Set();
-    if (app.locals.subKey) {
-      rows.forEach(r => {
-        const v = String(r[app.locals.subKey] || '').trim();
-        if (v) set.add(v);
-      });
-    }
-    res.json({ subdepartments: [...set].sort() });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    const { name, num } = app.locals.sdCols;
+    const map = new Map(); // description -> number
+    rows.forEach(r=>{
+      const n  = String(r[name] || '').trim();
+      const no = String(r[num]  || '').trim();
+      if (n) {
+        if (!map.has(n)) map.set(n, no);
+      }
+    });
+
+    const subdepartments = [...map.entries()]
+      .map(([desc, no]) => ({
+        label: no ? `${desc} - ${no}` : desc,
+        value: desc.toLowerCase(),    // what client will send back
+        number: no
+      }))
+      .sort((a,b)=> a.label.localeCompare(b.label));
+
+    res.json({ subdepartments });
+  }catch(e){
+    res.status(500).json({ error:e.message });
   }
 });
 
 /* -----------------------------------------------------------
-   /api/search-items?term=xxx&limit=50&subdept=Sub Dept Name
-   Searches code/brand/description, pads numeric UPCs,
-   and (optionally) filters by sub-department.
+   /api/search-items?term=...&limit=50&subdept=<lowercased desc>
    ----------------------------------------------------------- */
 app.get('/api/search-items', async (req, res) => {
-  const term     = String(req.query.term || '').trim();
-  const limit    = Math.max(1, Math.min(500, parseInt(req.query.limit || 50, 10)));
-  const subdeptQ = String(req.query.subdept || '').toLowerCase();
-
-  if (!term && !subdeptQ) return res.json({ results: [] });
+  const termRaw   = String(req.query.term || '').trim();
+  const limit     = Math.max(1, Math.min(500, parseInt(req.query.limit || 50, 10)));
+  const sdFilter  = String(req.query.subdept || '').toLowerCase();
 
   let rows;
-  try {
-    rows = await getAllRows();
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
-  }
+  try { rows = await getAllRows(); }
+  catch(e){ return res.status(500).json({ error:e.message }); }
+
   if (!rows.length) return res.json({ results: [] });
 
-  // ---------- Column detection (once) ----------
+  // detect columns once
   if (!app.locals.colMap) {
     const keys = Object.keys(rows[0]);
     const pick = (aliases) => keys.find(k => aliases.includes(norm(k)));
     app.locals.colMap = {
-      code   : pick(['code','itemcode','upc','maincode','maincode','itemcode']) || keys[0],
-      brand  : pick(['brand','mainitembrand','main itembrand']) || keys[1] || keys[0],
-      desc   : pick(['description','desc','mainitemdescription','main itemdescription']) || keys[2] || keys[0],
-      subdep : pick(['subdepartmentdescription','subdepartment','subdept','subdepartmentnumber']) || null
+      code  : pick(['code','upc','itemcode','maincode','mainitemcode']) || keys[0],
+      brand : pick(['brand','mainitembrand','itembrand'])               || keys[1] || keys[0],
+      desc  : pick(['description','desc','mainitemdescription'])        || keys[2] || keys[0],
+      sdName: pick(['subdepartmentdescription','subdepartmentdesc','subdeptdescription']),
+      sdNum : pick(['subdepartmentnumber','subdeptnumber','subdepartmentno'])
     };
   }
-  const { code, brand, desc, subdep } = app.locals.colMap;
+  const { code, brand, desc, sdName } = app.locals.colMap;
 
-  // ---------- Sub-department filter ----------
-  if (subdeptQ && subdep) {
-    rows = rows.filter(r => String(r[subdep] || '').toLowerCase() === subdeptQ);
+  // Pre-filter by sub-department if selected
+  if (sdFilter && sdName) {
+    rows = rows.filter(r => String(r[sdName] || '').toLowerCase() === sdFilter);
   }
 
-  // ---------- Matching setup ----------
-  const isNum     = /^\d+$/.test(term);
-  const digits    = term.replace(/\D/g, '');
-  const shortNum  = isNum && digits.length < 6;
-  const upcNeedle = (!shortNum && isNum) ? canonUPC(digits) : null;
-  const qLower    = term.toLowerCase();
+  // If no term, just return the (possibly subdept-filtered) rows
+  if (!termRaw) {
+    return res.json({ results: rows.slice(0, limit) });
+  }
 
-  // ---------- Score & filter ----------
-  const scored = rows.map(r => {
+  // ---- term search ----
+  const term       = termRaw;
+  const isNum      = /^\d+$/.test(term);
+  const digits     = term.replace(/\D/g,'');
+  const shortNum   = isNum && digits.length < 6;
+  const upcNeedle  = (!shortNum && isNum) ? canonUPC(digits) : null;
+  const qLower     = term.toLowerCase();
+
+  const results = rows.map(r=>{
     const rawCode = String(r[code]  ?? '').trim();
     const rawBr   = String(r[brand] ?? '');
     const rawDesc = String(r[desc]  ?? '');
@@ -294,11 +315,10 @@ app.get('/api/search-items', async (req, res) => {
     const ds      = rawDesc.toLowerCase();
 
     let score = 0;
-
     if (isNum) {
       if (upcNeedle) {
-        if (can === upcNeedle)        score += 100;   // exact UPC
-        else if (can.includes(upcNeedle)) score += 50;
+        if (can === upcNeedle)             score += 100;
+        else if (can.includes(upcNeedle))  score += 50;
       }
       if (shortNum && (can.includes(digits) || rawCode.includes(digits))) score += 25;
     } else {
@@ -308,15 +328,43 @@ app.get('/api/search-items', async (req, res) => {
       if (ds.includes(qLower))  score += 10;
       if (rawCode.includes(term)) score += 12;
     }
+    return { row:r, score };
+  }).filter(o=>o.score>0);
 
-    return { row: r, score };
-  })
-  // keep rows that matched, or allow pure subdept searches (score===0 but subdept filter applied)
-  .filter(o => o.score > 0 || (!term && subdeptQ));
+  results.sort((a,b)=> b.score - a.score);
 
-  scored.sort((a, b) => b.score - a.score);
+  res.json({ results: results.slice(0, limit).map(o=>o.row) });
+});
 
-  res.json({ results: scored.slice(0, limit).map(o => o.row) });
+/* -----------------------------------------------------------
+   /api/bulk-upc?codes=111,222,333
+   Returns exact matches only (canonicalised).
+   ----------------------------------------------------------- */
+app.get('/api/bulk-upc', async (req, res) => {
+  const codesParam = String(req.query.codes || '').trim();
+  if (!codesParam) return res.json({ results: [] });
+
+  const want = codesParam.split(/[\s,]+/).map(canonUPC).filter(Boolean);
+  if (!want.length) return res.json({ results: [] });
+
+  let rows;
+  try { rows = await getAllRows(); }
+  catch(e){ return res.status(500).json({ error:e.message }); }
+
+  if (!rows.length) return res.json({ results: [] });
+
+  // detect code col
+  if (!app.locals.codeCol){
+    const keys = Object.keys(rows[0]);
+    app.locals.codeCol =
+      keys.find(k => ['code','upc','itemcode','maincode'].includes(norm(k))) || keys[0];
+  }
+  const codeCol = app.locals.codeCol;
+
+  const set = new Set(want);
+  const hits = rows.filter(r => set.has(canonUPC(r[codeCol])));
+
+  res.json({ results: hits });
 });
 
 /* ---------- start ---------- */
