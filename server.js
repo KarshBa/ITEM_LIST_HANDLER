@@ -200,5 +200,76 @@ app.post('/upload', upload.single('csv'), (req, res) => {
   }
 });
 
+/* -----------------------------------------------------------
+   /api/search-items?term=xxx&limit=50
+   Searches code/brand/description in the cached CSV rows.
+   ----------------------------------------------------------- */
+app.get('/api/search-items', async (req, res) => {
+  const term  = String(req.query.term || '').trim();
+  const limit = Math.max(1, Math.min(200, parseInt(req.query.limit || 50, 10)));
+  if (!term) return res.json({ results: [] });
+
+  // load all rows once (cached)
+  let rows;
+  try {
+    rows = await getAllRows();
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+
+  // Try to detect common column names just once
+  // (cache them on first call)
+  if (!app.locals.colMap) {
+    const sample = rows[0] || {};
+    const lower  = k => k.toLowerCase();
+    const findCol = aliases =>
+      Object.keys(sample).find(k => aliases.includes(lower(k)));
+    app.locals.colMap = {
+      code : findCol(['code','item code','upc','main code']) || 'code',
+      brand: findCol(['brand','main item-brand'])            || 'brand',
+      desc : findCol(['description','main item-description'])|| 'description'
+    };
+  }
+  const { code, brand, desc } = app.locals.colMap;
+
+  const isNumeric = /^\d/.test(term);
+  const canonUPC = raw => {
+    const d = String(raw||'').replace(/\D/g,'');
+    if (!d) return '';
+    if (d.length === 12) return ('0' + d.slice(0,11)).padStart(13,'0');
+    return d.padStart(13,'0');
+  };
+
+  const needle = term.toLowerCase();
+  const needleUPC = isNumeric ? canonUPC(term) : null;
+
+  // score rows
+  const scored = rows.map(r => {
+    const rCode = String(r[code] || '').trim();
+    const rBrand= String(r[brand]||'').toLowerCase();
+    const rDesc = String(r[desc] ||'').toLowerCase();
+
+    let score = 0;
+
+    if (isNumeric) {
+      const canon = canonUPC(rCode);
+      if (canon === needleUPC) score += 100;          // perfect code match
+      else if (canon.includes(needleUPC)) score += 40;
+    }
+
+    // text matches
+    if (rBrand === needle) score += 30;
+    if (rDesc  === needle) score += 25;
+    if (rBrand.includes(needle)) score += 15;
+    if (rDesc .includes(needle)) score += 10;
+
+    return { row: r, score };
+  }).filter(o => o.score > 0);
+
+  scored.sort((a,b)=> b.score - a.score);
+
+  res.json({ results: scored.slice(0, limit).map(o=>o.row) });
+});
+
 /* ---------- start ---------- */
 app.listen(PORT, () => console.log(`Master Item List server running on ${PORT}`));
