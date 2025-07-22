@@ -25,6 +25,7 @@
   <button id="prevBtn" class="secondary" disabled>Prev</button>
   <button id="nextBtn" class="secondary">Next</button>
   <button id="refreshBtn" class="secondary">Refresh Items</button>
+  <button id="downloadBtn" class="success">Download CSV</button>
 </div>
 <!-- new standalone line, full-width, flush left -->
 <div id="pageInfo" class="page-info"></div>
@@ -129,6 +130,11 @@ document.getElementById('refreshBtn').onclick = async () => {
 
   btn.disabled = false;
   btn.textContent = 'Refresh Items';
+};
+
+  document.getElementById('downloadBtn').onclick = () => {
+  // Let the server set the correct filename; just navigate.
+  window.location.href = '/api/download-items';
 };
   
 /* ---------- initial load ---------- */
