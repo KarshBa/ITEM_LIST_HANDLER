@@ -141,6 +141,14 @@ app.get('/item_list.csv', (req, res) => {
   res.json({ success: true });
 });
 
+app.get('/api/download-items', (req, res) => {
+  if (!fs.existsSync(CSV_PATH)) return res.status(404).send('File not found');
+  const stamp = new Date().toISOString().slice(0,10).replace(/-/g, '_'); // YYYY_MM_DD
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename=item_list_${stamp}.csv`);
+  fs.createReadStream(CSV_PATH).pipe(res);
+});
+
 app.post('/upload', upload.single('csv'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
