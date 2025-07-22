@@ -8,6 +8,42 @@ const info       = document.getElementById('resultInfo');
 const exportBtn  = document.getElementById('exportBtn');
 const subSel     = document.getElementById('subdeptSelect');
 
+// --- column map & helpers (used by suggestions) -----------------
+let colMap = null;
+const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g,'');
+function ensureColMap(row){
+  if (colMap) return;
+  const keys = Object.keys(row);
+  const find = aliases => keys.find(k => aliases.includes(norm(k)));
+  colMap = {
+    code : find(['upc','code','itemcode','maincode']) || keys[0],
+    brand: find(['brand','itembrand','mainitembrand']) || keys[1] || keys[0],
+    desc : find(['description','desc','mainitemdescription']) || keys[2] || keys[0]
+  };
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+// --- dropdown helpers -------------------------------------------
+function hideSuggestions(){
+  sugg.classList.add('hidden');
+  sugg.innerHTML = '';
+}
+function showSuggestions(list){
+  if (!list.length){ hideSuggestions(); return; }
+  ensureColMap(list[0]);
+
+  sugg.innerHTML = list.map(r=>{
+    const code  = r[colMap.code]  ?? '';
+    const brand = r[colMap.brand] ?? '';
+    const desc  = r[colMap.desc]  ?? '';
+    return `<li data-code="${code}">
+              <strong>${escapeHtml(brand) || '(no brand)'}</strong> – ${escapeHtml(desc) || '(no description)'}
+              <span class="muted" style="float:right">${code}</span>
+            </li>`;
+  }).join('');
+  sugg.classList.remove('hidden');
+}
+
 const debounce = (fn, wait=120)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), wait);} };
 
 const canonUPC = raw => {
@@ -58,22 +94,6 @@ async function fetchSuggestions(q){
   return results;
 }
 
-function showSuggestions(list){
-  if(!list.length){ sugg.classList.add('hidden'); sugg.innerHTML=''; return; }
-  buildColMap(list[0]);
-
-  sugg.innerHTML = list.map(r=>{
-    const code  = r[colMap.code]  || '';
-    const brand = r[colMap.brand] || '';
-    const desc  = r[colMap.desc]  || '';
-    return `<li data-code="${code}">
-              <strong>${brand || '(no brand)'}</strong> – ${desc || '(no description)'}
-              <span class="muted" style="float:right">${code}</span>
-            </li>`;
-  }).join('');
-  sugg.classList.remove('hidden');
-}
-
 const handleInput = debounce(async e=>{
   const q = e.target.value.trim();
   if(!q){ showSuggestions([]); return; }
@@ -89,13 +109,13 @@ sugg.addEventListener('mousedown', e=>{
   if(!li) return;
   e.preventDefault();
   box.value = li.dataset.code;
-  sugg.style.display='none';
+  hideSuggestions();;
   performSearch();
 });
 
 document.addEventListener('click', e=>{
   if(!sugg.contains(e.target) && e.target!==box){
-    sugg.style.display='none';
+    hideSuggestions();;
   }
 });
 
@@ -172,48 +192,6 @@ exportBtn.addEventListener('click', ()=>{
   URL.revokeObjectURL(a.href);
 });
 
-/* ===== SEARCH / AUTOCOMPLETE / BULK UPC BLOCK ===== */
-document.addEventListener('DOMContentLoaded', () => {
-
-  const box   = document.getElementById('searchBox');
-  const subEl = document.getElementById('subdeptSelect');
-  const sList = document.getElementById('suggestions');
-  const bulkBox = document.getElementById('bulkUPCBox');
-
-  async function loadSubdepts(){
-    const r = await fetch('/api/subdepartments');
-    const { subdepartments } = await r.json();
-    subEl.innerHTML = '<option value="">All Sub Depts</option>' +
-      subdepartments.map(sd=>`<option value="${sd.value}">${sd.label}</option>`).join('');
-  }
-  loadSubdepts();
-
-  box.addEventListener('input', debounce(async e=>{
-    const q = e.target.value.trim();
-    if (!q) { sList.classList.add('hidden'); sList.innerHTML=''; return; }
-    const term = /^\d/.test(q) ? canonUPC(q) : q;
-    const url  = `/api/search-items?term=${encodeURIComponent(term)}&limit=30&subdept=${encodeURIComponent(subEl.value)}`;
-    const r    = await fetch(url);
-    const { results } = await r.json();
-
-    sList.innerHTML = results.map(r=>{
-      const code = r[guessCol('code', r)];
-      const brand= r[guessCol('brand', r)] || '';
-      const desc = r[guessCol('desc', r)]  || '';
-      return `<li data-code="${code}"><strong>${brand}</strong> – ${desc} <span style="float:right;color:#777;">${code}</span></li>`;
-    }).join('');
-    sList.classList.toggle('hidden', results.length === 0);
-  }, 150));
-
-  sList.addEventListener('mousedown', e=>{
-    const li = e.target.closest('li[data-code]');
-    if (!li) return;
-    e.preventDefault();
-    box.value = li.dataset.code;
-    performSearch();
-    sList.classList.add('hidden');
-  });
-
   subEl.addEventListener('change', ()=> performSearch());
 
   document.getElementById('searchBtn').onclick = performSearch;
@@ -232,6 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!res.ok) return alert('Search failed');
     const { results } = await res.json();
     renderTable(results);
+    hideSuggestions();
   }
 
   document.getElementById('bulkUPCBtn').onclick = bulkUPCSearch;
