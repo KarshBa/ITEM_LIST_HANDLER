@@ -91,6 +91,16 @@ async function getAllRows() {
   return itemsCache.rows;
 }
 
+// ---------- search helpers ----------
+const canonUPC = raw => {
+  const d = String(raw || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.length === 12) return ('0' + d.slice(0, 11)).padStart(13, '0');
+  return d.padStart(13, '0');
+};
+
+const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
 /* ---------- routes ---------- */
 app.get('/api/metadata', (req, res) => res.json(readMeta()));
 
@@ -200,14 +210,45 @@ app.post('/upload', upload.single('csv'), (req, res) => {
   }
 });
 
+/* unique Sub-department list for the dropdown */
+app.get('/api/subdepartments', async (_req, res) => {
+  try {
+    const rows = await getAllRows();
+    if (!rows.length) return res.json({ subdepartments: [] });
+
+    // detect the subdept column once
+    if (!app.locals.subKey) {
+      const keys = Object.keys(rows[0]);
+      app.locals.subKey =
+        keys.find(k => norm(k) === 'subdepartmentdescription') ||
+        keys.find(k => norm(k).includes('subdept')) ||
+        null;
+    }
+
+    const set = new Set();
+    if (app.locals.subKey) {
+      rows.forEach(r => {
+        const v = String(r[app.locals.subKey] || '').trim();
+        if (v) set.add(v);
+      });
+    }
+    res.json({ subdepartments: [...set].sort() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 /* -----------------------------------------------------------
-   /api/search-items?term=xxx&limit=50
-   Searches code/brand/description with sane fallbacks.
+   /api/search-items?term=xxx&limit=50&subdept=Sub Dept Name
+   Searches code/brand/description, pads numeric UPCs,
+   and (optionally) filters by sub-department.
    ----------------------------------------------------------- */
 app.get('/api/search-items', async (req, res) => {
-  const term  = String(req.query.term || '').trim();
-  const limit = Math.max(1, Math.min(200, parseInt(req.query.limit || 50, 10)));
-  if (!term) return res.json({ results: [] });
+  const term     = String(req.query.term || '').trim();
+  const limit    = Math.max(1, Math.min(500, parseInt(req.query.limit || 50, 10)));
+  const subdeptQ = String(req.query.subdept || '').toLowerCase();
+
+  if (!term && !subdeptQ) return res.json({ results: [] });
 
   let rows;
   try {
@@ -218,68 +259,64 @@ app.get('/api/search-items', async (req, res) => {
   if (!rows.length) return res.json({ results: [] });
 
   // ---------- Column detection (once) ----------
-  const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g,'');
-  const first = rows[0];
   if (!app.locals.colMap) {
-    const keys = Object.keys(first);
+    const keys = Object.keys(rows[0]);
     const pick = (aliases) => keys.find(k => aliases.includes(norm(k)));
     app.locals.colMap = {
-      code : pick(['code','itemcode','itemcode','item code','upc','maincode','main code']) || keys[0],
-      brand: pick(['brand','mainitembrand','main item-brand'])                              || keys[1] || keys[0],
-      desc : pick(['description','desc','mainitemdescription','main item-description'])    || keys[2] || keys[0]
+      code   : pick(['code','itemcode','upc','maincode','maincode','itemcode']) || keys[0],
+      brand  : pick(['brand','mainitembrand','main itembrand']) || keys[1] || keys[0],
+      desc   : pick(['description','desc','mainitemdescription','main itemdescription']) || keys[2] || keys[0],
+      subdep : pick(['subdepartmentdescription','subdepartment','subdept','subdepartmentnumber']) || null
     };
   }
-  const { code, brand, desc } = app.locals.colMap;
+  const { code, brand, desc, subdep } = app.locals.colMap;
 
-  // ---------- Matching helpers ----------
-  const canonUPC = raw => {
-    const d = String(raw||'').replace(/\D/g,'');
-    if (!d) return '';
-    if (d.length === 12) return ('0' + d.slice(0,11)).padStart(13,'0');
-    return d.padStart(13,'0');
-  };
+  // ---------- Sub-department filter ----------
+  if (subdeptQ && subdep) {
+    rows = rows.filter(r => String(r[subdep] || '').toLowerCase() === subdeptQ);
+  }
 
-  const isNumeric   = /^\d/.test(term);
-  const digitsOnly  = term.replace(/\D/g,'');
-  const shortNumber = isNumeric && digitsOnly.length < 6;  // treat "1", "123" as partials
-  const needleUPC   = (!shortNumber && isNumeric) ? canonUPC(term) : null;
-  const needleLower = term.toLowerCase();
+  // ---------- Matching setup ----------
+  const isNum     = /^\d+$/.test(term);
+  const digits    = term.replace(/\D/g, '');
+  const shortNum  = isNum && digits.length < 6;
+  const upcNeedle = (!shortNum && isNum) ? canonUPC(digits) : null;
+  const qLower    = term.toLowerCase();
 
-  // ---------- Score rows ----------
+  // ---------- Score & filter ----------
   const scored = rows.map(r => {
     const rawCode = String(r[code]  ?? '').trim();
     const rawBr   = String(r[brand] ?? '');
     const rawDesc = String(r[desc]  ?? '');
 
-    const canon   = canonUPC(rawCode);
+    const can     = canonUPC(rawCode);
     const br      = rawBr.toLowerCase();
     const ds      = rawDesc.toLowerCase();
 
     let score = 0;
 
-    if (isNumeric) {
-      if (needleUPC) {
-        if (canon === needleUPC)          score += 100; // exact UPC
-        else if (canon.includes(needleUPC)) score += 50;
+    if (isNum) {
+      if (upcNeedle) {
+        if (can === upcNeedle)        score += 100;   // exact UPC
+        else if (can.includes(upcNeedle)) score += 50;
       }
-      if (shortNumber) {
-        if (canon.includes(digitsOnly) || rawCode.includes(digitsOnly)) score += 25;
-      }
+      if (shortNum && (can.includes(digits) || rawCode.includes(digits))) score += 25;
+    } else {
+      if (br === qLower)        score += 30;
+      if (ds === qLower)        score += 25;
+      if (br.includes(qLower))  score += 15;
+      if (ds.includes(qLower))  score += 10;
+      if (rawCode.includes(term)) score += 12;
     }
 
-    // text matches
-    if (br === needleLower)             score += 30;
-    if (ds === needleLower)             score += 25;
-    if (br.includes(needleLower))       score += 15;
-    if (ds.includes(needleLower))       score += 10;
-    if (!isNumeric && rawCode.includes(term)) score += 12;
-
     return { row: r, score };
-  }).filter(o => o.score > 0);
+  })
+  // keep rows that matched, or allow pure subdept searches (score===0 but subdept filter applied)
+  .filter(o => o.score > 0 || (!term && subdeptQ));
 
-  scored.sort((a,b)=> b.score - a.score);
+  scored.sort((a, b) => b.score - a.score);
 
-  res.json({ results: scored.slice(0, limit).map(o=>o.row) });
+  res.json({ results: scored.slice(0, limit).map(o => o.row) });
 });
 
 /* ---------- start ---------- */
