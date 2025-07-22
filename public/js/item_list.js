@@ -78,9 +78,13 @@ btn.addEventListener('click', performSearch);
 async function performSearch(){
   const q = box.value.trim();
   if(!q) return;
-
   let term = q;
-  if(/^\d/.test(q)) term = canonUPC(q);        // pad numeric queries
+  if (/^\d+$/.test(q)) {
+    const digits = q.replace(/\D/g,'');
+    if (digits.length >= 11) {
+      term = canonUPC(digits);
+    }
+  }
 
   const res = await fetch(`/api/search-items?term=${encodeURIComponent(term)}&limit=500`);
   if(!res.ok){ alert('Search failed'); return; }
