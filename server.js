@@ -91,15 +91,6 @@ async function getAllRows() {
   return itemsCache.rows;
 }
 
-// ---------- shared helpers ----------
-const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g,'');
-const canonUPC = raw => {
-  const d = String(raw || '').replace(/\D/g,'');
-  if (!d) return '';
-  if (d.length === 12) return ('0' + d.slice(0,11)).padStart(13,'0');
-  return d.padStart(13,'0');
-};
-
 // ---------- search helpers ----------
 const canonUPC = raw => {
   const d = String(raw || '').replace(/\D/g, '');
