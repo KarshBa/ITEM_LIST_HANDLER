@@ -27,6 +27,24 @@ function escapeHtml(s){
   }[c]));
 }
 
+/* ---- date helpers for MM/DD/YY sale dates ---- */
+// Parse strings like "11/5/25" into a Date (local), or null if invalid
+function parseMMDDYY(str){
+  if (!str) return null;
+  const parts = String(str).trim().split(/[^\d]+/).filter(Boolean);
+  if (parts.length !== 3) return null;
+  let [m, d, y] = parts.map(Number);
+  if (!m || !d || isNaN(y)) return null;
+  if (y < 100) y += 2000;          // 25 -> 2025 (tweak if needed)
+  return new Date(y, m - 1, d);    // local date (no time normalization yet)
+}
+
+// Return a new Date truncated to local midnight
+function toDateOnly(dt){
+  if (!(dt instanceof Date)) return null;
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+}
+
 /* ---- dynamic column map ---- */
 let colMap = null;
 const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g,'');
@@ -128,20 +146,85 @@ function renderTable(rows){
   const tbody = tbl.querySelector('tbody');
   thead.innerHTML = tbody.innerHTML = '';
 
-  if(!rows.length){
+  if (!rows.length){
     info.textContent = 'No results.';
     return;
   }
 
   ensureColMap(rows[0]);
   const keys = Object.keys(rows[0]);
-  thead.innerHTML = '<tr>' + keys.map(k=>`<th>${k}</th>`).join('') + '</tr>';
 
-  rows.forEach(r=>{
+  // Build header row
+  thead.innerHTML = '<tr>' + keys.map(k => `<th>${k}</th>`).join('') + '</tr>';
+
+  // --- column name lookups (case-insensitive) ------------------  // NEW
+  const lc = s => s.toLowerCase();
+
+  const notForSaleCol = keys.find(k => lc(k) === 'pos information-not for sale');   // NEW
+  const saleStartCol  = keys.find(k => lc(k) === 'price-sale-start');               // NEW
+  const saleEndCol    = keys.find(k => lc(k) === 'price-sale-end');                 // NEW
+  const mainCodeCol   = keys.find(k => lc(k) === 'main code');                      // NEW
+  const aisleCol      = keys.find(k => lc(k) === 'location-aisle');                 // NEW
+  const sectionCol    = keys.find(k => lc(k) === 'location-section');               // NEW
+
+  // Today's date (local) normalized to midnight                      // NEW
+  const today = toDateOnly(new Date());                               // NEW
+
+  rows.forEach(r => {
     const tr = document.createElement('tr');
-    keys.forEach(k=>{
-      tr.insertAdjacentHTML('beforeend', `<td data-label="${k}">${r[k] ?? ''}</td>`);
+
+    // ---- compute flags for this row ------------------------------  // NEW
+    const notForSaleVal = notForSaleCol && r[notForSaleCol] != null
+      ? String(r[notForSaleCol]).trim()
+      : '';
+
+    const isNotForSale = notForSaleVal === '1';
+
+    let isOnSale = false;
+    if (saleStartCol && saleEndCol){
+      const startDateRaw = r[saleStartCol];
+      const endDateRaw   = r[saleEndCol];
+
+      const start = startDateRaw ? toDateOnly(parseMMDDYY(startDateRaw)) : null;
+      const end   = endDateRaw   ? toDateOnly(parseMMDDYY(endDateRaw))   : null;
+
+      if (start && end && today){
+        // Inclusive range: start <= today <= end
+        if (start.getTime() <= today.getTime() && today.getTime() <= end.getTime()){
+          isOnSale = true;
+        }
+      }
+    }
+
+    // Apply row-level classes based on flags                         // NEW
+    if (isNotForSale && isOnSale){
+      tr.classList.add('row-not-for-sale-on-sale');
+    } else if (isNotForSale){
+      tr.classList.add('row-not-for-sale');
+    } else if (isOnSale){
+      tr.classList.add('row-on-sale');
+    }
+
+    // Precompute location tooltip (if any)                           // NEW
+    const aisle   = aisleCol   ? String(r[aisleCol]   ?? '').trim() : '';
+    const section = sectionCol ? String(r[sectionCol] ?? '').trim() : '';
+    const locationText = [aisle, section].filter(Boolean).join(' ');
+    const locationTooltip = locationText ? `Location: ${locationText}` : '';
+
+    // ---- build cells ----------------------------------------------
+    keys.forEach(k => {
+      const td = document.createElement('td');
+      td.dataset.label = k;
+      td.textContent = r[k] ?? '';
+
+      // If this is the "Main code" cell, attach tooltip if we have one
+      if (mainCodeCol && k === mainCodeCol && locationTooltip){
+        td.title = locationTooltip;                                      // NEW
+      }
+
+      tr.appendChild(td);
     });
+
     tbody.appendChild(tr);
   });
 
