@@ -69,3 +69,26 @@ th{background:#f1f3f4;}
 .suggest-list li:last-child{ border-bottom:none; }
 .suggest-list li:hover{ background:#f1f3f4; }
 .muted{ color:#5f6368; font-size:.8rem; }
+/* --- row highlighting for POS / sale status --- */
+.row-not-for-sale {
+  background-color: #ffe5e5; /* light red */
+  color: #111;
+}
+
+.row-on-sale {
+  background-color: #e3f7e3; /* light green */
+  color: #111;
+}
+
+/* conflict: not for sale + on active sale */
+.row-not-for-sale-on-sale {
+  background-image: repeating-linear-gradient(
+    135deg,
+    #ffe5e5,
+    #ffe5e5 6px,
+    #e3f7e3 6px,
+    #e3f7e3 12px
+  );
+  background-color: #f5f5f5; /* fallback */
+  color: #111;
+}
