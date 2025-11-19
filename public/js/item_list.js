@@ -157,23 +157,25 @@ function renderTable(rows){
   // Build header row
   thead.innerHTML = '<tr>' + keys.map(k => `<th>${k}</th>`).join('') + '</tr>';
 
-  // --- normalized column name map (using your existing `norm`) ---  // UPDATED
+  // --- normalized column name map (using your existing `norm`) ---
   const keyNorm = {};
   keys.forEach(k => { keyNorm[k] = norm(k); });
 
   const findCol = (aliases) =>
     keys.find(k => aliases.includes(keyNorm[k]));
 
-  // These aliases are the normalized forms (no spaces/punctuation)
-  const notForSaleCol = findCol(['posinformationnotforsale']);       // "POS information-Not for sale"
-  const saleStartCol  = findCol(['pricesalestart']);                 // "Price-Sale-Start"
-  const saleEndCol    = findCol(['pricesaleend']);                   // "Price-Sale-End"
-  const mainCodeCol   = findCol(['maincode','code']);                // "Main code"
-  const aisleCol      = findCol(['locationaisle','aisle']);          // "Location-Aisle"
-  const sectionCol    = findCol(['locationsection','section']);      // "Location-Section"
+  // Aliases are normalized (no spaces/punctuation)
+  const notForSaleCol = findCol(['posinformationnotforsale']);  // "POS information-Not for sale"
+  const saleStartCol  = findCol(['pricesalestart']);            // "Price-Sale-Start"
+  const saleEndCol    = findCol(['pricesaleend']);              // "Price-Sale-End"
+  const tprStartCol   = findCol(['pricetprstart']);             // "Price-TPR-Start"
+  const tprEndCol     = findCol(['pricetprend']);               // "Price-TPR-End"
+  const mainCodeCol   = findCol(['maincode','code']);           // "Main code"
+  const aisleCol      = findCol(['locationaisle','aisle']);     // "Location-Aisle"
+  const sectionCol    = findCol(['locationsection','section']); // "Location-Section"
 
-  // (Optional) debug: see what it actually matched
-  // console.log({ notForSaleCol, saleStartCol, saleEndCol, mainCodeCol, aisleCol, sectionCol });
+  // (Optional) debug:
+  // console.log({ notForSaleCol, saleStartCol, saleEndCol, tprStartCol, tprEndCol, mainCodeCol, aisleCol, sectionCol });
 
   // Today's date (local) normalized to midnight
   const today = toDateOnly(new Date());
@@ -181,7 +183,7 @@ function renderTable(rows){
   rows.forEach(r => {
     const tr = document.createElement('tr');
 
-    // ---- compute flags for this row ------------------------------
+    // ---- compute "not for sale" flag ------------------------------
     let isNotForSale = false;
     if (notForSaleCol){
       const raw = String(r[notForSaleCol] ?? '').trim().toLowerCase();
@@ -195,60 +197,92 @@ function renderTable(rows){
         num === 1;
     }
 
+    // ---- compute "on sale" flag -----------------------------------
     let isOnSale = false;
+    let saleStartDate = null;
+    let saleEndDate   = null;
+
     if (saleStartCol && saleEndCol){
       const startDateRaw = r[saleStartCol];
       const endDateRaw   = r[saleEndCol];
 
-      const start = startDateRaw ? toDateOnly(parseMMDDYY(startDateRaw)) : null;
-      const end   = endDateRaw   ? toDateOnly(parseMMDDYY(endDateRaw))   : null;
+      saleStartDate = startDateRaw ? toDateOnly(parseMMDDYY(startDateRaw)) : null;
+      saleEndDate   = endDateRaw   ? toDateOnly(parseMMDDYY(endDateRaw))   : null;
 
-      if (start && end && today){
-        // Inclusive range: start <= today <= end
+      if (saleStartDate && saleEndDate && today){
         const t = today.getTime();
-        if (start.getTime() <= t && t <= end.getTime()){
+        if (saleStartDate.getTime() <= t && t <= saleEndDate.getTime()){
           isOnSale = true;
         }
       }
     }
 
-    // Apply row-level classes based on flags
-    if (isNotForSale && isOnSale){
-      tr.classList.add('row-not-for-sale-on-sale');
-    } else if (isNotForSale){
-      tr.classList.add('row-not-for-sale');
-    } else if (isOnSale){
-      tr.classList.add('row-on-sale');
+    // ---- compute "on TPR" flag ------------------------------------
+    let isOnTPR = false;
+    let tprStartDate = null;
+    let tprEndDate   = null;
+
+    if (tprStartCol && tprEndCol){
+      const tprStartRaw = r[tprStartCol];
+      const tprEndRaw   = r[tprEndCol];
+
+      tprStartDate = tprStartRaw ? toDateOnly(parseMMDDYY(tprStartRaw)) : null;
+      tprEndDate   = tprEndRaw   ? toDateOnly(parseMMDDYY(tprEndRaw))   : null;
+
+      if (tprStartDate && tprEndDate && today){
+        const t = today.getTime();
+        if (tprStartDate.getTime() <= t && t <= tprEndDate.getTime()){
+          isOnTPR = true;
+        }
+      }
     }
 
-    // --- tooltip text: Location + optional sale dates ------------------  // UPDATED
-const aisle   = aisleCol   ? String(r[aisleCol]   ?? '').trim() : '';
-const section = sectionCol ? String(r[sectionCol] ?? '').trim() : '';
-const locationText = [aisle, section].filter(Boolean).join(' ');
+    // ---- choose a single row class based on flags -----------------
+    let rowClass = null;
 
-// Format sale dates if the item is on sale
-let saleText = '';
-if (isOnSale && saleStartCol && saleEndCol) {
-  const rawStart = r[saleStartCol] ?? '';
-  const rawEnd   = r[saleEndCol]   ?? '';
+    if (isNotForSale && isOnSale && isOnTPR){
+      rowClass = 'row-not-for-sale-on-sale-on-tpr';
+    } else if (isNotForSale && isOnSale){
+      rowClass = 'row-not-for-sale-on-sale';
+    } else if (isNotForSale && isOnTPR){
+      rowClass = 'row-not-for-sale-on-tpr';
+    } else if (isOnSale && isOnTPR){
+      rowClass = 'row-on-sale-on-tpr';
+    } else if (isNotForSale){
+      rowClass = 'row-not-for-sale';
+    } else if (isOnSale){
+      rowClass = 'row-on-sale';
+    } else if (isOnTPR){
+      rowClass = 'row-on-tpr';
+    }
 
-  // Re-parse so we can normalize YYYY correctly for tooltip
-  const start = parseMMDDYY(rawStart);
-  const end   = parseMMDDYY(rawEnd);
+    if (rowClass){
+      tr.classList.add(rowClass);
+    }
 
-  if (start && end) {
-    // Format mm/dd/yyyy
-    const fmt = d => (d.getMonth()+1) + '/' + d.getDate() + '/' + d.getFullYear();
-    saleText = `Sale: ${fmt(start)} - ${fmt(end)}`;
-  }
-}
+    // --- tooltip text: Location + optional Sale + optional TPR -----
+    const aisle   = aisleCol   ? String(r[aisleCol]   ?? '').trim() : '';
+    const section = sectionCol ? String(r[sectionCol] ?? '').trim() : '';
+    const locationText = [aisle, section].filter(Boolean).join(' ');
 
-// Build full tooltip
-let tooltipParts = [];
-if (locationText) tooltipParts.push(`Location: ${locationText}`);
-if (saleText)     tooltipParts.push(saleText);
+    const fmtDate = d => (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
 
-const locationTooltip = tooltipParts.join(', ');
+    let saleText = '';
+    if (isOnSale && saleStartDate && saleEndDate){
+      saleText = `Sale: ${fmtDate(saleStartDate)} - ${fmtDate(saleEndDate)}`;
+    }
+
+    let tprText = '';
+    if (isOnTPR && tprStartDate && tprEndDate){
+      tprText = `TPR: ${fmtDate(tprStartDate)} - ${fmtDate(tprEndDate)}`;
+    }
+
+    const tooltipParts = [];
+    if (locationText) tooltipParts.push(`Location: ${locationText}`);
+    if (saleText)     tooltipParts.push(saleText);
+    if (tprText)      tooltipParts.push(tprText);
+
+    const combinedTooltip = tooltipParts.join(', ');
 
     // ---- build cells ----------------------------------------------
     keys.forEach(k => {
@@ -257,8 +291,8 @@ const locationTooltip = tooltipParts.join(', ');
       td.textContent = r[k] ?? '';
 
       // If this is the "Main code" cell, attach tooltip if we have one
-      if (mainCodeCol && k === mainCodeCol && locationTooltip){
-        td.title = locationTooltip;
+      if (mainCodeCol && k === mainCodeCol && combinedTooltip){
+        td.title = combinedTooltip;
       }
 
       tr.appendChild(td);
