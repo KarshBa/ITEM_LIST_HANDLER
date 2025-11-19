@@ -221,11 +221,34 @@ function renderTable(rows){
       tr.classList.add('row-on-sale');
     }
 
-    // Precompute location tooltip (if any)
-    const aisle   = aisleCol   ? String(r[aisleCol]   ?? '').trim() : '';
-    const section = sectionCol ? String(r[sectionCol] ?? '').trim() : '';
-    const locationText = [aisle, section].filter(Boolean).join(' ');
-    const locationTooltip = locationText ? `Location: ${locationText}` : '';
+    // --- tooltip text: Location + optional sale dates ------------------  // UPDATED
+const aisle   = aisleCol   ? String(r[aisleCol]   ?? '').trim() : '';
+const section = sectionCol ? String(r[sectionCol] ?? '').trim() : '';
+const locationText = [aisle, section].filter(Boolean).join(' ');
+
+// Format sale dates if the item is on sale
+let saleText = '';
+if (isOnSale && saleStartCol && saleEndCol) {
+  const rawStart = r[saleStartCol] ?? '';
+  const rawEnd   = r[saleEndCol]   ?? '';
+
+  // Re-parse so we can normalize YYYY correctly for tooltip
+  const start = parseMMDDYY(rawStart);
+  const end   = parseMMDDYY(rawEnd);
+
+  if (start && end) {
+    // Format mm/dd/yyyy
+    const fmt = d => (d.getMonth()+1) + '/' + d.getDate() + '/' + d.getFullYear();
+    saleText = `Sale: ${fmt(start)} - ${fmt(end)}`;
+  }
+}
+
+// Build full tooltip
+let tooltipParts = [];
+if (locationText) tooltipParts.push(`Location: ${locationText}`);
+if (saleText)     tooltipParts.push(saleText);
+
+const locationTooltip = tooltipParts.join(', ');
 
     // ---- build cells ----------------------------------------------
     keys.forEach(k => {
