@@ -92,3 +92,49 @@ th{background:#f1f3f4;}
   background-color: #f5f5f5; /* fallback */
   color: #111;
 }
+/* --- TPR row highlighting --- */
+.row-on-tpr {
+  background-color: #e3f0ff; /* light blue */
+  color: #111;
+}
+
+/* not for sale + TPR (red + blue stripes) */
+.row-not-for-sale-on-tpr {
+  background-image: repeating-linear-gradient(
+    135deg,
+    #ffe5e5,
+    #ffe5e5 6px,
+    #e3f0ff 6px,
+    #e3f0ff 12px
+  );
+  background-color: #f5f5f5;
+  color: #111;
+}
+
+/* sale + TPR (green + blue stripes) */
+.row-on-sale-on-tpr {
+  background-image: repeating-linear-gradient(
+    135deg,
+    #e3f7e3,
+    #e3f7e3 6px,
+    #e3f0ff 6px,
+    #e3f0ff 12px
+  );
+  background-color: #f5f5f5;
+  color: #111;
+}
+
+/* not for sale + sale + TPR (red + green + blue stripes) */
+.row-not-for-sale-on-sale-on-tpr {
+  background-image: repeating-linear-gradient(
+    135deg,
+    #ffe5e5,
+    #ffe5e5 4px,
+    #e3f7e3 4px,
+    #e3f7e3 8px,
+    #e3f0ff 8px,
+    #e3f0ff 12px
+  );
+  background-color: #f5f5f5;
+  color: #111;
+}
