@@ -157,28 +157,43 @@ function renderTable(rows){
   // Build header row
   thead.innerHTML = '<tr>' + keys.map(k => `<th>${k}</th>`).join('') + '</tr>';
 
-  // --- column name lookups (case-insensitive) ------------------  // NEW
-  const lc = s => s.toLowerCase();
+  // --- normalized column name map (using your existing `norm`) ---  // UPDATED
+  const keyNorm = {};
+  keys.forEach(k => { keyNorm[k] = norm(k); });
 
-  const notForSaleCol = keys.find(k => lc(k) === 'pos information-not for sale');   // NEW
-  const saleStartCol  = keys.find(k => lc(k) === 'price-sale-start');               // NEW
-  const saleEndCol    = keys.find(k => lc(k) === 'price-sale-end');                 // NEW
-  const mainCodeCol   = keys.find(k => lc(k) === 'main code');                      // NEW
-  const aisleCol      = keys.find(k => lc(k) === 'location-aisle');                 // NEW
-  const sectionCol    = keys.find(k => lc(k) === 'location-section');               // NEW
+  const findCol = (aliases) =>
+    keys.find(k => aliases.includes(keyNorm[k]));
 
-  // Today's date (local) normalized to midnight                      // NEW
-  const today = toDateOnly(new Date());                               // NEW
+  // These aliases are the normalized forms (no spaces/punctuation)
+  const notForSaleCol = findCol(['posinformationnotforsale']);       // "POS information-Not for sale"
+  const saleStartCol  = findCol(['pricesalestart']);                 // "Price-Sale-Start"
+  const saleEndCol    = findCol(['pricesaleend']);                   // "Price-Sale-End"
+  const mainCodeCol   = findCol(['maincode','code']);                // "Main code"
+  const aisleCol      = findCol(['locationaisle','aisle']);          // "Location-Aisle"
+  const sectionCol    = findCol(['locationsection','section']);      // "Location-Section"
+
+  // (Optional) debug: see what it actually matched
+  // console.log({ notForSaleCol, saleStartCol, saleEndCol, mainCodeCol, aisleCol, sectionCol });
+
+  // Today's date (local) normalized to midnight
+  const today = toDateOnly(new Date());
 
   rows.forEach(r => {
     const tr = document.createElement('tr');
 
-    // ---- compute flags for this row ------------------------------  // NEW
-    const notForSaleVal = notForSaleCol && r[notForSaleCol] != null
-      ? String(r[notForSaleCol]).trim()
-      : '';
-
-    const isNotForSale = notForSaleVal === '1';
+    // ---- compute flags for this row ------------------------------
+    let isNotForSale = false;
+    if (notForSaleCol){
+      const raw = String(r[notForSaleCol] ?? '').trim().toLowerCase();
+      const num = parseFloat(raw);
+      // Be forgiving: treat 1 / "1" / "true" / "y" as "not for sale"
+      isNotForSale =
+        raw === '1' ||
+        raw === 'true' ||
+        raw === 'y' ||
+        raw === 'yes' ||
+        num === 1;
+    }
 
     let isOnSale = false;
     if (saleStartCol && saleEndCol){
@@ -190,13 +205,14 @@ function renderTable(rows){
 
       if (start && end && today){
         // Inclusive range: start <= today <= end
-        if (start.getTime() <= today.getTime() && today.getTime() <= end.getTime()){
+        const t = today.getTime();
+        if (start.getTime() <= t && t <= end.getTime()){
           isOnSale = true;
         }
       }
     }
 
-    // Apply row-level classes based on flags                         // NEW
+    // Apply row-level classes based on flags
     if (isNotForSale && isOnSale){
       tr.classList.add('row-not-for-sale-on-sale');
     } else if (isNotForSale){
@@ -205,7 +221,7 @@ function renderTable(rows){
       tr.classList.add('row-on-sale');
     }
 
-    // Precompute location tooltip (if any)                           // NEW
+    // Precompute location tooltip (if any)
     const aisle   = aisleCol   ? String(r[aisleCol]   ?? '').trim() : '';
     const section = sectionCol ? String(r[sectionCol] ?? '').trim() : '';
     const locationText = [aisle, section].filter(Boolean).join(' ');
@@ -219,7 +235,7 @@ function renderTable(rows){
 
       // If this is the "Main code" cell, attach tooltip if we have one
       if (mainCodeCol && k === mainCodeCol && locationTooltip){
-        td.title = locationTooltip;                                      // NEW
+        td.title = locationTooltip;
       }
 
       tr.appendChild(td);
