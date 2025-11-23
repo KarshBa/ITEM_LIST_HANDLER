@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Master Item List</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://item-list-handler.onrender.com/shared/nav.css?v=1.0.0">
 </head>
 <body>
   <header><h1>Master Item List Upload</h1></header>
@@ -141,5 +142,6 @@ document.getElementById('refreshBtn').onclick = async () => {
 fetch('/api/metadata').then(r => r.ok && r.json().then(renderMetadata));
 loadPage(1);
 </script>
+<script src="https://item-list-handler.onrender.com/shared/nav.js?v=1.0.0"></script>
 </body>
 </html>
