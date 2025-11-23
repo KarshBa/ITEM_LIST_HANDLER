@@ -360,3 +360,17 @@ if (bulkUPCBtn && bulkBox){
 
 /* ---- init ---- */
 loadSubdepartments();
+
+/* PATCH: auto-run search if ?q= is present in URL */
+(function autoSearchFromURL(){
+  const params = new URLSearchParams(window.location.search);
+  const q = (params.get('q') || '').trim();
+  const sd = (params.get('subdept') || '').trim(); // optional, if you ever pass it
+
+  if (sd) subSel.value = sd;
+
+  if (q){
+    box.value = q;
+    performSearch();
+  }
+})();
