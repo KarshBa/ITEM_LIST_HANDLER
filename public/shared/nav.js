@@ -10,14 +10,14 @@
 	  <li>
         <a href="#">Quick ▾</a>
         <ul>
-          <li>
-            <a href="https://inventory-counts.onrender.com/simplelist.html">
-              List Tool
-            </a>
-          </li>
 		  <li>
             <a href="https://item-list-handler.onrender.com/item_list.html">
               Item Search
+            </a>
+          </li>
+          <li>
+            <a href="https://inventory-counts.onrender.com/simplelist.html">
+              List Tool
             </a>
           </li>
           <li>
@@ -44,6 +44,11 @@
           <li>
             <a href="https://movement-3ka5.onrender.com/department_sales.html">
               Last Week Sales
+            </a>
+          </li>
+		  <li>
+            <a href="https://movement-3ka5.onrender.com/vendor_review.html">
+              Vendor Review
             </a>
           </li>
         </ul>
