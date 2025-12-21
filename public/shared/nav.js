@@ -130,6 +130,11 @@
               Master Item List
             </a>
           </li>
+		  <li>
+            <a href="https://sales-batches-app.onrender.com/ncg_product_hierarchy.html">
+              NCG Product Hierarchy
+            </a>
+          </li>
         </ul>
       </li>
 
