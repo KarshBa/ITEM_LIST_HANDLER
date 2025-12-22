@@ -93,7 +93,10 @@
 
   /* --- CO-OP DEALS 1-UP TEMPLATE (landscape) ------------------- */
   /* For the 1-up Co-op Deals you showed: letter landscape. */
-  @page { size: letter portrait; margin: 0; } /* default for multi-up */
+  @media print {
+  .page-landscape { page: landscape; }
+}
+  @page landscape { size: letter landscape; margin: 0; }
 
   @media print {
     /* When printing the landscape 1-up template */
