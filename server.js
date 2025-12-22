@@ -43,6 +43,12 @@ async function pingDownstreams() {
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// --- Sign / Tag printing page ------------------------------------
+// (static file lives in /public/signs.html)
+app.get(['/signs', '/signs.html'], (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'signs.html'));
+});
+
 /* ---------- paths ---------- */
 const DATA_DIR  = process.env.DATA_DIR || path.join(__dirname, 'data');
 const CSV_PATH  = path.join(DATA_DIR, 'item_list.csv');
@@ -325,6 +331,64 @@ app.get('/api/search-items', async (req, res) => {
   results.sort((a,b)=> b.score - a.score);
 
   res.json({ results: results.slice(0, limit).map(o=>o.row) });
+});
+
+// --- printing column detection + API ------------------------------
+function detectPrintCols(sampleRow) {
+  const keys = Object.keys(sampleRow || {});
+  const pick = (aliases) => keys.find(k => aliases.includes(norm(k)));
+
+  return {
+    code: pick(['code','upc','itemcode','maincode','mainitemcode']) || keys[0],
+    brand: pick(['mainitembrand','brand','itembrand','main item-brand','main item brand']),
+    desc: pick(['mainitemdescription','description','desc','main item-description','main item description','posdescription','item-posdescription']),
+    size: pick(['mainitemsize','size','main item-size','main item size','pack','packsize']),
+    reg:  pick([
+      'price-regular-price','regularprice','regprice','reg_price',
+      'price','reg','regular price','price regular price'
+    ])
+  };
+}
+
+app.get('/api/print-items', async (req, res) => {
+  try {
+    const codesParam = String(req.query.codes || '').trim();
+    if (!codesParam) return res.json({ items: [] });
+
+    const want = codesParam.split(/[\s,]+/).map(canonUPC).filter(Boolean);
+    if (!want.length) return res.json({ items: [] });
+
+    const rows = await getAllRows();
+    if (!rows.length) return res.json({ items: [] });
+
+    // detect once and cache
+    if (!app.locals.printCols) app.locals.printCols = detectPrintCols(rows[0]);
+    const { code, brand, desc, size, reg } = app.locals.printCols;
+
+    // map rows by canonical UPC
+    const map = new Map();
+    for (const r of rows) {
+      const c = canonUPC(r[code]);
+      if (c) map.set(c, r);
+    }
+
+    const items = want.map(upc => {
+      const r = map.get(upc) || {};
+      const regNum = parseFloat(String(r[reg] ?? '').replace(/[^0-9.]/g,'')) || 0;
+
+      return {
+        upc,
+        brand: String(r[brand] ?? '').trim(),
+        description: String(r[desc] ?? '').trim(),
+        size: String(r[size] ?? '').trim(),
+        reg_price: regNum
+      };
+    });
+
+    res.json({ items, cols: app.locals.printCols });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 /* -----------------------------------------------------------
