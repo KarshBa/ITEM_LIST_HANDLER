@@ -178,36 +178,40 @@ function escapeHTML(s) {
 /* ---------------- MAIN APP ------------------------------------ */
 const layoutEl = document.getElementById('layout');
 const sourceEl = document.getElementById('source');
-const batchControls = document.getElementById('batchControls');
-const batchIdEl = document.getElementById('batchId');
-const recordTypeEl = document.getElementById('recordType');
+const batchControls = document.getElementById('batchControls'); // may be null
+const batchIdEl = document.getElementById('batchId');           // may be null
+const recordTypeEl = document.getElementById('recordType');     // may be null
 const upcListEl = document.getElementById('upcList');
 const previewEl = document.getElementById('preview');
 const printRoot = document.getElementById('printRoot');
 
-let master = [];
-let masterMap = new Map();
-let batches = [];
-
-async function loadAll() {
-  master = await getJSON('/data/master_items.json');
-  masterMap = new Map(master.map(o => [normalizeUPC(o.upc), o]));
-
-  batches = await getJSON('/api/batches');
-  batchIdEl.innerHTML = '';
-  for (const b of batches) {
-    const opt = document.createElement('option');
-    opt.value = b.id;
-    opt.textContent = b.name ? `${b.name} (${b.id})` : b.id;
-    batchIdEl.appendChild(opt);
+// Pull standardized print fields from item_movement server
+async function fetchPrintItems(upcs) {
+  const q = encodeURIComponent(upcs.join(','));
+  try {
+    const data = await getJSON(`/api/print-items?codes=${q}`);
+    return data.items || [];
+  } catch (e) {
+    // friendlier hint if route isn't added yet
+    if (String(e.message || '').includes('404')) {
+      throw new Error('Missing /api/print-items on the server. Add the endpoint to item_movement/server.js.');
+    }
+    throw e;
   }
 }
-await loadAll();
 
+// item_movement version: REG only (batches live in a different service)
 sourceEl.addEventListener('change', () => {
-  const on = sourceEl.value === 'BATCH';
-  batchControls.classList.toggle('hidden', !on);
+  if (sourceEl.value === 'BATCH') {
+    sourceEl.value = 'REG';
+    toast('Batch pricing is not available in item_movement yet (REG only).', 'error');
+  }
+  batchControls?.classList.add('hidden');
 });
+
+// Ensure batch UI is hidden on first load
+if (sourceEl && sourceEl.value === 'BATCH') sourceEl.value = 'REG';
+batchControls?.classList.add('hidden');
 
 document.getElementById('btnPreview').addEventListener('click', async () => {
   try {
@@ -215,28 +219,16 @@ document.getElementById('btnPreview').addEventListener('click', async () => {
     if (!upcs.length) return toast('Paste at least 1 UPC.', 'error');
 
     const layout = layoutEl.value;
-    const source = sourceEl.value;
-    const batchId = batchIdEl.value;
-    const recordType = recordTypeEl.value;
+    
+    // item_movement: REG only
+const items = await fetchPrintItems(upcs);
+const itemMap = new Map(items.map(it => [normalizeUPC(it.upc), it]));
 
-    // Resolve batch lines once (if needed)
-    let batch = null;
-    if (source === 'BATCH') {
-      batch = batches.find(b => String(b.id) === String(batchId));
-      if (!batch) return toast('Batch not found.', 'error');
-    }
-
-    const resolved = upcs.map(code => {
-      const item = masterMap.get(code) || { upc: code, brand:'', description:'', reg_price:0 };
-      let batchLine = null;
-
-      if (source === 'BATCH' && batch) {
-        batchLine = (batch.lines || []).find(l => normalizeUPC(l.upc || l.UPC || l.code || '') === code) || null;
-      }
-
-      const fields = resolveFields({ item, source, batchLine, recordType });
-      return { code, item, batchLine, fields };
-    });
+const resolved = upcs.map(code => {
+  const item = itemMap.get(code) || { upc: code, brand:'(NOT FOUND)', description:'', size:'', reg_price: 0 };
+  const fields = resolveFields({ item, source: 'REG', batchLine: null, recordType: '' });
+  return { code, item, batchLine: null, fields };
+});
 
     // Build screen preview
     previewEl.innerHTML = '';
