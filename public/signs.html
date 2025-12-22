@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Sign & Tag Printing</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://item-list-handler.onrender.com/shared/nav.css?v=1.0.0">
+<style>
+  :root { --sunflower:#0b7a3b; } /* cozy green-ish header */
+  header.app-header{
+    background: var(--sunflower);
+    color:#fff;
+    text-align:center;
+    justify-content:center;
+    padding: 1.1rem 0 1rem;
+    margin: 0 0 1.0rem;
+  }
+
+  .grid {
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: .75rem;
+    margin-bottom: 1rem;
+  }
+  .panel {
+    background: var(--panel);
+    border:1px solid var(--border);
+    border-radius: var(--radius);
+    padding:.75rem;
+  }
+  .panel h2 { margin:.1rem 0 .6rem; font-size:1rem; }
+
+  .row { display:flex; gap:.5rem; flex-wrap:wrap; align-items:flex-end; }
+  .row > * { flex: 1; min-width: 180px; }
+  .row .tight { flex:0; min-width:auto; }
+
+  textarea#upcList { min-height: 120px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.8rem; }
+
+  /* Preview area (on screen) */
+  .preview-wrap {
+    background: #fff;
+    border:1px dashed #cfd7df;
+    border-radius: 10px;
+    padding: .75rem;
+    overflow:auto;
+  }
+
+  /* --- PRINT LAYOUT SYSTEM ------------------------------------- */
+  /* We'll print from #printRoot only */
+  #printRoot { display:none; }
+
+  @media print {
+    body { background:#fff; }
+    header.app-header, .grid, .preview-wrap, .toast-container { display:none !important; }
+    #printRoot { display:block; }
+  }
+
+  /* Each printed page */
+  .print-page {
+    width: 8.5in;
+    height: 11in;
+    position: relative;
+    page-break-after: always;
+    overflow: hidden;
+  }
+
+  /* Layouts: use CSS grid inside a letter page */
+  .layout {
+    width:100%;
+    height:100%;
+    display:grid;
+  }
+
+  /* 16-up: 4 x 4 */
+  .layout.l16 { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); }
+  /* 12-up: 3 x 4 */
+  .layout.l12 { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); }
+  /* 4-up: 2 x 2 */
+  .layout.l4  { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
+  /* 2-up: 1 x 2 */
+  .layout.l2  { grid-template-columns: 1fr; grid-template-rows: repeat(2, 1fr); }
+  /* 1-up (portrait): single cell */
+  .layout.l1p { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+
+  /* Cell padding / cut lines (optional) */
+  .cell {
+    position: relative;
+    overflow:hidden;
+    padding: 0.10in;
+    border: 0.5pt solid rgba(0,0,0,.10);
+  }
+
+  /* --- CO-OP DEALS 1-UP TEMPLATE (landscape) ------------------- */
+  /* For the 1-up Co-op Deals you showed: letter landscape. */
+  @page { size: letter portrait; margin: 0; } /* default for multi-up */
+
+  @media print {
+    /* When printing the landscape 1-up template */
+    .page-landscape {
+      width: 11in;
+      height: 8.5in;
+    }
+  }
+
+  .coop1 {
+    width: 11in;
+    height: 8.5in;
+    position: relative;
+    overflow:hidden;
+    background:#fff;
+    font-family: system-ui, Arial, sans-serif;
+  }
+  .coop1 .hdr {
+    position:absolute;
+    left:0; top:0;
+    width:100%;
+    height: 2.9in;
+    background: #0a7a3b;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .coop1 .hdr img {
+    width:100%;
+    height:100%;
+    object-fit: cover;
+  }
+
+  .coop1 .brand {
+    position:absolute;
+    top: 3.05in;
+    left: .5in;
+    right: .5in;
+    text-align:center;
+    font-weight: 800;
+    font-size: 0.55in;
+    color:#555;
+  }
+  .coop1 .desc {
+    position:absolute;
+    top: 3.85in;
+    left: .5in;
+    right: .5in;
+    text-align:center;
+    font-size: 0.45in;
+    color:#666;
+    line-height:1.05;
+  }
+  .coop1 .size {
+    position:absolute;
+    top: 4.9in;
+    left: .5in;
+    right: .5in;
+    text-align:center;
+    font-size: 0.28in;
+    color:#666;
+  }
+  .coop1 .price {
+    position:absolute;
+    top: 5.05in;
+    left: .6in;
+    right: 2.4in;
+    text-align:center;
+    font-size: 1.55in;
+    font-weight: 300;
+    letter-spacing: .02em;
+    color:#555;
+  }
+  .coop1 .regLabel {
+    position:absolute;
+    top: 6.2in;
+    right: .6in;
+    font-size: .22in;
+    color:#666;
+    text-align:center;
+    width: 1.6in;
+  }
+  .coop1 .regPrice {
+    position:absolute;
+    top: 6.55in;
+    right: .6in;
+    font-size: .28in;
+    font-weight: 600;
+    color:#666;
+    text-align:center;
+    width: 1.6in;
+  }
+  .coop1 .barcode {
+    position:absolute;
+    left: .55in;
+    bottom: .55in;
+    width: 2.2in;
+    height: .7in;
+  }
+  .coop1 .code {
+    position:absolute;
+    left: .55in;
+    bottom: .35in;
+    width: 2.2in;
+    text-align:left;
+    font-size: .16in;
+    color:#666;
+  }
+  .coop1 .dates {
+    position:absolute;
+    right: .6in;
+    bottom: .45in;
+    font-size: .18in;
+    color:#666;
+    letter-spacing:.02em;
+  }
+</style>
+</head>
+
+<body>
+<header class="app-header">
+  <h1>Sign & Tag Printing</h1>
+</header>
+
+<main class="narrow" style="max-width:1100px; margin:0 auto; padding: 0 1rem 2rem;">
+  <div class="grid">
+    <div class="panel">
+      <h2>1) Layout</h2>
+      <label>Sheet Layout</label>
+      <select id="layout">
+        <option value="16">16-up (4×4)</option>
+        <option value="12">12-up (3×4)</option>
+        <option value="4">4-up (2×2)</option>
+        <option value="2">2-up (1×2)</option>
+        <option value="1p">1-up (portrait)</option>
+        <option value="coop1">Co-op Deals 1-up (landscape)</option>
+      </select>
+      <div style="margin-top:.5rem; font-size:.8rem; color:#666;">
+        Tip: use <b>Co-op Deals 1-up</b> for the big header/PRICE sign.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>2) Price Source</h2>
+      <label>Source</label>
+      <select id="source">
+        <option value="REG">Regular (Master Item List)</option>
+        <option value="BATCH">From a Batch (SALE/TPR/INSTORE)</option>
+      </select>
+
+      <div id="batchControls" class="hidden" style="margin-top:.5rem;">
+        <label>Batch</label>
+        <select id="batchId"></select>
+
+        <label style="margin-top:.5rem;">Record Type</label>
+        <select id="recordType">
+          <option value="SALE">SALE</option>
+          <option value="TPR">TPR</option>
+          <option value="INSTORE">INSTORE</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>3) UPCs</h2>
+      <label>Paste UPCs (comma / space / newline)</label>
+      <textarea id="upcList" placeholder="0020111100000
+0020111200000"></textarea>
+      <div class="row" style="margin-top:.5rem;">
+        <button id="btnPreview">Build Preview</button>
+        <button id="btnPrint" class="secondary">Print</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="preview-wrap">
+    <div id="preview" style="display:grid; gap:.75rem;"></div>
+  </div>
+
+  <!-- PRINT ROOT (only shown in print media) -->
+  <div id="printRoot"></div>
+</main>
+
+<div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script type="module" src="signs.js"></script>
+<script src="https://item-list-handler.onrender.com/shared/nav.js?v=1.0.0"></script>
+</body>
+</html>
