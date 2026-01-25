@@ -66,10 +66,6 @@
   list-style: none;
 }
 
-.menu ul li:hover > ul{
-  display: flex;
-}
-
 .menu ul li ul li{
   list-style: none;
 }
@@ -123,6 +119,11 @@
     border-top: 1px solid rgba(255, 255, 255, 0.1);
   }
 
+  /* Disable hover-open on mobile */
+  .menu ul li:hover > ul{
+    display: none;
+  }
+
   /* Submenus collapsed by default */
   .menu ul li ul{
     position: static;
@@ -131,10 +132,20 @@
     box-shadow: none;
     display: none;
     padding: 0;
+    background: var(--menu-bg);
   }
 
   /* Open submenu when tapped */
   .menu > ul > li.submenu-open > ul{
     display: block;
+  }
+
+  .menu ul li ul li a{
+    color: var(--menu-text);
+    padding-left: 2rem; /* indent submenu items */
+  }
+
+  .menu ul li ul li a:hover{
+    background-color: var(--menu-hover-bg);
   }
 }
