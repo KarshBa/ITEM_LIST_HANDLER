@@ -66,6 +66,11 @@
   list-style: none;
 }
 
+/* Desktop: show dropdowns on hover */
+.menu ul li:hover > ul{
+display: flex;
+}
+
 .menu ul li ul li{
   list-style: none;
 }
