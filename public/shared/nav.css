@@ -86,16 +86,44 @@
   background-color: #f0f0f0;
 }
 
-/* Mobile: stack nav vertically */
+/* Toggle button (hidden on desktop) */
+.menu-toggle{
+  display: none;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--menu-text);
+  font: inherit;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+}
+.menu-toggle:hover{
+  background-color: var(--menu-hover-bg);
+}
+
+/* Mobile: hamburger + collapsible menu */
 @media (max-width: 700px){
+  .menu-toggle{
+    display: block;
+  }
+
+  /* Hide the list until opened */
   .menu > ul{
+    display: none;
     flex-direction: column;
     align-items: stretch;
   }
+  .menu.is-open > ul{
+    display: flex;
+  }
+
   .menu > ul > li{
     width: 100%;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
   }
+
+  /* Submenus collapsed by default */
   .menu ul li ul{
     position: static;
     border: 0;
@@ -104,7 +132,9 @@
     display: none;
     padding: 0;
   }
-  .menu ul li:hover > ul{
+
+  /* Open submenu when tapped */
+  .menu > ul > li.submenu-open > ul{
     display: block;
   }
 }
