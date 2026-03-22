@@ -24,6 +24,11 @@
               List Tool
             </a>
           </li>
+		  <li>
+            <a href="https://qr-generator-3794.onrender.com/floor_map.html">
+              Floor Map
+            </a>
+          </li>
           <li>
             <a href="https://inventory-counts.onrender.com/user_home.html">
               User Page
