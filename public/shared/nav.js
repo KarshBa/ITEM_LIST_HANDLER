@@ -6,7 +6,6 @@
 	☰ Menu
 	</button>
 	  
-	<ul id="menu-list">
       <ul id="menu-list">
       <li>
         <a href="https://inventory-counts.onrender.com/admin_home.html">Home</a>
