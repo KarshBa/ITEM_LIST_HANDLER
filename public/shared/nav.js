@@ -7,6 +7,7 @@
 	</button>
 	  
 	<ul id="menu-list">
+      <ul id="menu-list">
       <li>
         <a href="https://inventory-counts.onrender.com/admin_home.html">Home</a>
       </li>
@@ -176,7 +177,12 @@
               QR Code Generator
             </a>
           </li>
-		  <li>
+		      <li>
+            <a href="https://scan-sheet-builder.onrender.com/">
+              Scan Sheet Generator
+            </a>
+          </li>
+          <li>
             <a href="https://free-radio-qz75.onrender.com/">
               Free-Radio
             </a>
