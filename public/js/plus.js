@@ -42,49 +42,68 @@ function render(items){
 
   info.textContent = `${items.length} PLU(s) shown — ${selectedLabel}`;
 
+  const ROWS_PER_COLUMN = 28;
+  const COLUMNS_PER_PAGE = 3;
+  const ROWS_PER_PAGE = ROWS_PER_COLUMN * COLUMNS_PER_PAGE;
+
   let html = '';
 
   grouped.forEach((categories, subdepartment) => {
-    html += `
-      <section class="plu-subdept-section">
-        <h2 class="plu-subdept-title">${escapeHtml(subdepartment)}</h2>
-        <div class="plu-columns">
-    `;
-
     categories.forEach((catItems, category) => {
-      html += `
-        <section class="plu-category-section">
-          <h3 class="plu-category-title">${escapeHtml(category)}</h3>
-          <table class="plu-table">
-            <thead>
-              <tr>
-                <th>PLU</th>
-                <th>Description</th>
-              </tr>
-            </thead>
-            <tbody>
-      `;
+      for (let pageStart = 0; pageStart < catItems.length; pageStart += ROWS_PER_PAGE) {
+        const pageItems = catItems.slice(pageStart, pageStart + ROWS_PER_PAGE);
 
-      catItems.forEach(item => {
         html += `
-          <tr>
-            <td class="plu-code">${escapeHtml(item.plu)}</td>
-            <td>${escapeHtml(item.description)}</td>
-          </tr>
+          <section class="plu-print-page">
+            <section class="plu-subdept-section">
+              <h2 class="plu-subdept-title">${escapeHtml(subdepartment)}</h2>
+              <div class="plu-columns">
         `;
-      });
 
-      html += `
-            </tbody>
-          </table>
-        </section>
-      `;
+        for (let col = 0; col < COLUMNS_PER_PAGE; col++) {
+          const colItems = pageItems.slice(
+            col * ROWS_PER_COLUMN,
+            (col + 1) * ROWS_PER_COLUMN
+          );
+
+          html += `
+            <div class="plu-print-col">
+              <section class="plu-category-section">
+                <h3 class="plu-category-title">${escapeHtml(category)}</h3>
+                <table class="plu-table">
+                  <thead>
+                    <tr>
+                      <th>PLU</th>
+                      <th>Description</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+          `;
+
+          colItems.forEach(item => {
+            html += `
+              <tr>
+                <td class="plu-code">${escapeHtml(item.plu)}</td>
+                <td>${escapeHtml(item.description)}</td>
+              </tr>
+            `;
+          });
+
+          html += `
+                  </tbody>
+                </table>
+              </section>
+            </div>
+          `;
+        }
+
+        html += `
+              </div>
+            </section>
+          </section>
+        `;
+      }
     });
-
-    html += `
-        </div>
-      </section>
-    `;
   });
 
   printArea.innerHTML = html;
