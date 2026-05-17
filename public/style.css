@@ -139,3 +139,211 @@ th{background:#f1f3f4;}
   color: #111;
 }
 .muted { color:#5f6368; font-size:.9rem; }
+/* =========================================================
+   Scale PLU print page
+   ========================================================= */
+
+.plu-main{
+  max-width:none;
+}
+
+.plu-main .input-group .flex{
+  max-width:420px;
+}
+
+.plu-main select{
+  width:auto;
+  min-width:260px;
+  max-width:420px;
+  flex:0 0 auto;
+}
+
+.plu-main .flex{
+  align-items:flex-end;
+}
+
+.plu-print-area{
+  margin-top:1rem;
+}
+
+.plu-subdept-section{
+  margin-bottom:1.5rem;
+}
+
+.plu-subdept-title{
+  font-size:1.4rem;
+  margin:0 0 .75rem;
+  padding:.5rem .7rem;
+  background:#202124;
+  color:#fff;
+  border-radius:var(--radius);
+}
+
+.plu-columns{
+  column-count:3;
+  column-gap:.35in;
+}
+
+.plu-category-section{
+  break-inside:avoid;
+  page-break-inside:avoid;
+  display:inline-block;
+  width:100%;
+  margin:0 0 .35in;
+  background:#fff;
+}
+
+.plu-category-title{
+  font-size:1rem;
+  line-height:1.2;
+  padding:.25rem .35rem;
+  background:#f1f3f4;
+  border:1px solid #bbb;
+  border-bottom:none;
+}
+
+.plu-table{
+  margin:0;
+  width:100%;
+  border-collapse:collapse;
+  border-radius:0;
+  overflow:visible;
+}
+
+.plu-table th,
+.plu-table td{
+  padding:.16rem .25rem;
+  border:1px solid #bbb;
+  font-size:.78rem;
+  line-height:1.15;
+}
+
+.plu-table th{
+  background:#4a4a4a;
+  color:#fff;
+  font-weight:700;
+}
+
+.plu-table tbody tr:nth-child(odd) td{
+  background:#fff;
+  color:#000;
+}
+
+.plu-table tbody tr:nth-child(even) td{
+  background:#f3f3f3;
+  color:#000;
+}
+
+.plu-code{
+  width:.75in;
+  font-weight:700;
+  white-space:nowrap;
+}
+
+@media print{
+  @page{
+    size:letter landscape;
+    margin:0.35in;
+  }
+
+  body{
+    background:#fff;
+    color:#000;
+  }
+
+  header,
+    .no-print,
+    nav,
+    .site-nav,
+    .app-nav,
+    .global-nav,
+    .top-nav,
+    .shared-nav,
+    .shared-nav-wrap,
+    .shared-nav-container,
+    #nav,
+    #navbar{
+  display:none !important;
+  }
+
+  body{
+    padding-top:0 !important;
+    margin-top:0 !important;
+  }
+
+  main,
+  .plu-main{
+    margin:0;
+    padding:0;
+  }
+
+  .plu-print-area{
+    margin:0;
+  }
+
+  .plu-subdept-section{
+    break-before:page;
+    page-break-before:always;
+    margin:0;
+  }
+
+  .plu-subdept-section:first-child{
+    break-before:auto;
+    page-break-before:auto;
+  }
+
+  .plu-subdept-title{
+    background:#fff;
+    color:#000;
+    border:2px solid #000;
+    border-radius:0;
+    font-size:14pt;
+    padding:4pt 6pt;
+    margin:0 0 8pt;
+  }
+
+  .plu-columns{
+    column-count:3;
+    column-gap:0.25in;
+  }
+
+  .plu-category-section{
+    margin:0 0 10pt;
+  }
+
+  .plu-category-title{
+    background:#eaeaea;
+    color:#000;
+    border:1px solid #000;
+    border-bottom:none;
+    font-size:9pt;
+    padding:3pt 4pt;
+  }
+
+  .plu-table th,
+  .plu-table td{
+    border:1px solid #000;
+    padding:2pt 3pt;
+    font-size:8pt;
+    line-height:1.1;
+  }
+
+  .plu-table th{
+    background:#4a4a4a !important;
+    color:#fff !important;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+
+  .plu-table tbody tr:nth-child(odd) td{
+    background:#fff !important;
+    color:#000 !important;
+  }
+
+  .plu-table tbody tr:nth-child(even) td{
+    background:#f3f3f3 !important;
+    color:#000 !important;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+}
