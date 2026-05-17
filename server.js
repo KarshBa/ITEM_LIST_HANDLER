@@ -1,3 +1,4 @@
+/* server.js */
 import express from 'express';
 import fetch   from 'node-fetch';
 import multer from 'multer';
@@ -47,6 +48,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 // (static file lives in /public/signs.html)
 app.get(['/signs', '/signs.html'], (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'signs.html'));
+});
+
+// --- PLU printing page -------------------------------------------
+// (static file lives in /public/plus.html)
+app.get(['/plus', '/plus.html'], (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'plus.html'));
 });
 
 /* ---------- paths ---------- */
@@ -184,6 +191,11 @@ app.post('/upload', upload.single('csv'), (req, res) => {
       .on('end', () => {
         fs.writeFileSync(META_PATH, JSON.stringify(meta));
         itemsCache = null;            // invalidate in-memory cache
+        app.locals.pluCols = null;
+        app.locals.sdCols = null;
+        app.locals.colMap = null;
+        app.locals.printCols = null;
+        app.locals.codeCol = null;
         pingDownstreams().catch(console.error);
         res.json(meta);
       })
@@ -208,6 +220,11 @@ app.post('/upload', upload.single('csv'), (req, res) => {
     meta.count = csvText.trim().split('\n').length - 1;
     fs.writeFileSync(META_PATH, JSON.stringify(meta));
     itemsCache = null;
+    app.locals.pluCols = null;
+    app.locals.sdCols = null;
+    app.locals.colMap = null;
+    app.locals.printCols = null;
+    app.locals.codeCol = null;
     pingDownstreams().catch(console.error);
     res.json(meta);
   } catch (err) {
@@ -331,6 +348,109 @@ app.get('/api/search-items', async (req, res) => {
   results.sort((a,b)=> b.score - a.score);
 
   res.json({ results: results.slice(0, limit).map(o=>o.row) });
+});
+
+// --- PLU column detection + API -----------------------------------
+function isFlagged(raw) {
+  const v = String(raw ?? '').trim().toLowerCase();
+  const n = parseFloat(v);
+  return v === '1' || v === 'true' || v === 'y' || v === 'yes' || n === 1;
+}
+
+function detectPLUCols(sampleRow) {
+  const keys = Object.keys(sampleRow || {});
+  const pick = (aliases) => keys.find(k => aliases.includes(norm(k)));
+
+  return {
+    plu: pick([
+      'posinformationplucode',
+      'plucode',
+      'posplucode'
+    ]),
+    notForSale: pick([
+      'posinformationnotforsale',
+      'notforsale'
+    ]),
+    scalable: pick([
+      'posinformationscalable',
+      'scalable',
+      'scaleitem',
+      'isscaleitem'
+    ]),
+    subdept: pick([
+      'subdepartmentdescription',
+      'subdepartmentdesc',
+      'subdeptdescription'
+    ]),
+    category: pick([
+      'categorydescription',
+      'categorydesc'
+    ]),
+    desc: pick([
+      'posinformationposdescription',
+      'posdescription',
+      'mainitemdescription',
+      'description',
+      'desc'
+    ])
+  };
+}
+
+app.get('/api/plus', async (req, res) => {
+  try {
+    const sdFilter = String(req.query.subdept || '').trim().toLowerCase();
+
+    const rows = await getAllRows();
+    if (!rows.length) return res.json({ items: [], subdepartments: [], cols: {} });
+
+    if (!app.locals.pluCols) app.locals.pluCols = detectPLUCols(rows[0]);
+    const cols = app.locals.pluCols;
+
+    if (!cols.plu) {
+      return res.status(500).json({
+        error: 'Could not find column "POS information-PLU code".',
+        cols
+      });
+    }
+
+    const items = rows
+      .map(r => {
+        const plu = String(r[cols.plu] ?? '').trim();
+        const notForSale = cols.notForSale ? isFlagged(r[cols.notForSale]) : false;
+        const scalable = cols.scalable ? isFlagged(r[cols.scalable]) : true;
+
+        return {
+          plu,
+          description: String(r[cols.desc] ?? '').trim(),
+          subdepartment: String(r[cols.subdept] ?? 'Unassigned Sub-department').trim() || 'Unassigned Sub-department',
+          category: String(r[cols.category] ?? 'Unassigned Category').trim() || 'Unassigned Category',
+          notForSale,
+          scalable
+        };
+      })
+      .filter(item => item.plu && !item.notForSale && item.scalable)
+      .filter(item => !sdFilter || item.subdepartment.toLowerCase() === sdFilter)
+      .sort((a, b) =>
+        a.subdepartment.localeCompare(b.subdepartment) ||
+        a.category.localeCompare(b.category) ||
+        a.description.localeCompare(b.description) ||
+        a.plu.localeCompare(b.plu, undefined, { numeric: true })
+      );
+
+    const subMap = new Map();
+    rows.forEach(r => {
+      const desc = String(r[cols.subdept] ?? '').trim();
+      if (desc) subMap.set(desc.toLowerCase(), desc);
+    });
+
+    const subdepartments = [...subMap.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+
+    res.json({ items, subdepartments, cols });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // --- printing column detection + API ------------------------------
