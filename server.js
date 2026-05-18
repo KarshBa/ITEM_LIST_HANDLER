@@ -8,6 +8,7 @@ import path from 'path';
 import csv from 'csv-parser';
 import XLSX from 'xlsx';
 import { fileURLToPath } from 'url';
+import { basicAuth } from './auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -42,6 +43,34 @@ async function pingDownstreams() {
 }
 
 app.use(cors());
+
+/*
+ * Basic Auth policy:
+ *
+ * Keep machine-to-machine read endpoints public so downstream apps do not break.
+ * Protect browser UI, uploads, sync trigger, downloads, and all other APIs.
+ *
+ * Public downstream endpoints currently used by other services:
+ * - GET /api/items
+ * - GET /api/bulk-upc
+ * - GET /item_list.csv
+ * - GET /api/metadata
+ */
+const PUBLIC_DOWNSTREAM_ROUTES = new Set([
+  'GET /api/items',
+  'GET /api/bulk-upc',
+  'GET /item_list.csv',
+  'GET /api/metadata'
+]);
+
+function authUnlessPublicDownstream(req, res, next) {
+  const key = `${req.method} ${req.path}`;
+  if (PUBLIC_DOWNSTREAM_ROUTES.has(key)) return next();
+  return basicAuth(req, res, next);
+}
+
+app.use(authUnlessPublicDownstream);
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Sign / Tag printing page ------------------------------------
