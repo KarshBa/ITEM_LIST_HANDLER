@@ -428,6 +428,7 @@ function detectPLUCols(sampleRow) {
 app.get('/api/plus', async (req, res) => {
   try {
     const sdFilter = String(req.query.subdept || '').trim().toLowerCase();
+    const debugTerm = String(req.query.debug || '').trim().toLowerCase();
 
     const rows = await getAllRows();
     if (!rows.length) return res.json({ items: [], subdepartments: [], cols: {} });
@@ -473,6 +474,39 @@ app.get('/api/plus', async (req, res) => {
     const subdepartments = [...subMap.entries()]
       .map(([value, label]) => ({ value, label }))
       .sort((a, b) => a.label.localeCompare(b.label));
+
+    if (debugTerm) {
+      const debugRows = rows
+        .filter(r => JSON.stringify(r).toLowerCase().includes(debugTerm))
+        .map(r => ({
+          raw: r,
+          detected: {
+            pluCol: cols.plu,
+            pluValue: cols.plu ? String(r[cols.plu] ?? '').trim() : '',
+            notForSaleCol: cols.notForSale,
+            notForSaleRaw: cols.notForSale ? r[cols.notForSale] : '',
+            notForSaleDetected: cols.notForSale ? isFlagged(r[cols.notForSale]) : false,
+            subdeptCol: cols.subdept,
+            subdepartment: cols.subdept ? String(r[cols.subdept] ?? '').trim() : '',
+            categoryCol: cols.category,
+            category: cols.category ? String(r[cols.category] ?? '').trim() : '',
+            descCol: cols.desc,
+            description: cols.desc ? String(r[cols.desc] ?? '').trim() : '',
+            wouldInclude: Boolean(
+              cols.plu &&
+              String(r[cols.plu] ?? '').trim() &&
+              !(cols.notForSale ? isFlagged(r[cols.notForSale]) : false)
+            )
+          }
+        }));
+
+      return res.json({
+        itemsCount: items.length,
+        cols,
+        debugTerm,
+        debugRows
+      });
+    }
 
     res.json({ items, subdepartments, cols });
   } catch (e) {
