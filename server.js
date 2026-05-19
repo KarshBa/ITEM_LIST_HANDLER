@@ -446,18 +446,16 @@ app.get('/api/plus', async (req, res) => {
       .map(r => {
         const plu = String(r[cols.plu] ?? '').trim();
         const notForSale = cols.notForSale ? isFlagged(r[cols.notForSale]) : false;
-        const scalable = cols.scalable ? isFlagged(r[cols.scalable]) : true;
 
         return {
           plu,
           description: String(r[cols.desc] ?? '').trim(),
           subdepartment: String(r[cols.subdept] ?? 'Unassigned Sub-department').trim() || 'Unassigned Sub-department',
           category: String(r[cols.category] ?? 'Unassigned Category').trim() || 'Unassigned Category',
-          notForSale,
-          scalable
+          notForSale
         };
       })
-      .filter(item => item.plu && !item.notForSale && item.scalable)
+      .filter(item => item.plu && !item.notForSale)
       .filter(item => !sdFilter || item.subdepartment.toLowerCase() === sdFilter)
       .sort((a, b) =>
         a.subdepartment.localeCompare(b.subdepartment) ||
